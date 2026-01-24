@@ -1,0 +1,46 @@
+<svg width="1024" height="1024" viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg">
+  <!-- Background -->
+  <rect width="1024" height="1024" fill="#111827"/>
+
+  <!-- Isometric Pixel Art P Logo -->
+  <!-- Grid: 8x8 pixels, each pixel is 80x80, centered with offset -->
+  <g transform="translate(192, 152)">
+    <!-- Pixel size: 80 -->
+
+    <!-- === TOP FACES (brightest white) === -->
+    <!-- Top of vertical stem -->
+    <rect x="80" y="0" width="160" height="80" fill="#FFFFFF"/>
+    <!-- Top of horizontal bar extending right -->
+    <rect x="240" y="0" width="320" height="80" fill="#FFFFFF"/>
+    <!-- Top of bowl curve outer -->
+    <rect x="560" y="80" width="80" height="80" fill="#FFFFFF"/>
+
+    <!-- === FRONT FACES (light gray) === -->
+    <!-- Vertical stem front - main pillar -->
+    <rect x="0" y="80" width="160" height="560" fill="#CCCCCC"/>
+    <!-- Bowl front top bar -->
+    <rect x="160" y="80" width="320" height="80" fill="#CCCCCC"/>
+    <!-- Bowl front right edge -->
+    <rect x="480" y="160" width="80" height="160" fill="#CCCCCC"/>
+    <!-- Bowl bottom bar front -->
+    <rect x="160" y="320" width="240" height="80" fill="#CCCCCC"/>
+
+    <!-- === RIGHT FACES (dark gray - isometric depth) === -->
+    <!-- Stem right side -->
+    <rect x="160" y="120" width="80" height="560" fill="#888888"/>
+    <!-- Top bar right side -->
+    <rect x="560" y="40" width="80" height="80" fill="#888888"/>
+    <!-- Bowl outer right face -->
+    <rect x="560" y="200" width="80" height="160" fill="#888888"/>
+    <!-- Bowl bottom right edge -->
+    <rect x="400" y="360" width="80" height="80" fill="#888888"/>
+
+    <!-- === BOTTOM/SHADOW FACES (darkest) === -->
+    <!-- Depth shadow under top bar -->
+    <rect x="160" y="80" width="80" height="40" fill="#666666"/>
+    <!-- Depth shadow at bowl corner -->
+    <rect x="560" y="120" width="40" height="40" fill="#666666"/>
+    <!-- Bottom of stem shadow -->
+    <rect x="160" y="640" width="80" height="40" fill="#555555"/>
+  </g>
+</svg>

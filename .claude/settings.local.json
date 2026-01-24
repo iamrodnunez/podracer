@@ -1,0 +1,21 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npx create-expo-app@latest:*)",
+      "Bash(npm install:*)",
+      "Bash(npx tsc:*)",
+      "Bash(grep:*)",
+      "Bash(timeout 15 npx expo start:*)",
+      "Bash(npx expo doctor:*)",
+      "Bash(npx expo export:*)",
+      "Bash(node -e \"require\\(''./App.tsx''\\)\")",
+      "Bash(npm uninstall:*)",
+      "Bash(pkill:*)",
+      "Bash(npx expo start --clear)",
+      "Bash(pgrep -f \"expo start\")",
+      "Bash(pgrep:*)",
+      "Bash(ls:*)",
+      "Bash(node scripts/generate-icons.js:*)"
+    ]
+  }
+}
