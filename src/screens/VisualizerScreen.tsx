@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect, useRef } from 'react';
+import React, { useState, useCallback, useEffect, useRef, Component, ErrorInfo, ReactNode } from 'react';
 import {
   View,
   Text,
@@ -19,6 +19,38 @@ import { shaderPresets, getPresetById } from '../shaders/presets';
 import * as audioService from '../services/audioService';
 
 const { width, height } = Dimensions.get('window');
+
+// Error boundary to catch GL crashes
+interface ErrorBoundaryProps {
+  children: ReactNode;
+  fallback: ReactNode;
+}
+
+interface ErrorBoundaryState {
+  hasError: boolean;
+}
+
+class VisualizerErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
+  constructor(props: ErrorBoundaryProps) {
+    super(props);
+    this.state = { hasError: false };
+  }
+
+  static getDerivedStateFromError(_: Error): ErrorBoundaryState {
+    return { hasError: true };
+  }
+
+  componentDidCatch(error: Error, errorInfo: ErrorInfo) {
+    console.error('Visualizer error:', error, errorInfo);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return this.props.fallback;
+    }
+    return this.props.children;
+  }
+}
 const ARTWORK_SIZE = width * 0.5;
 
 export const VisualizerScreen: React.FC = () => {
@@ -113,9 +145,17 @@ export const VisualizerScreen: React.FC = () => {
     }, 0);
   }, [setVisualizerSettings]);
 
+  const visualizerFallback = (
+    <View style={styles.visualizerFallback}>
+      <Text style={styles.fallbackText}>Visualizer unavailable</Text>
+    </View>
+  );
+
   return (
     <View style={styles.container}>
-      <GLVisualizer presetId={currentPresetId} />
+      <VisualizerErrorBoundary fallback={visualizerFallback}>
+        <GLVisualizer presetId={currentPresetId} />
+      </VisualizerErrorBoundary>
 
       {artworkUrl && (
         <View style={styles.artworkContainer}>
@@ -427,6 +467,17 @@ const styles = StyleSheet.create({
     fontSize: 12,
     minWidth: 60,
     textAlign: 'center',
+    letterSpacing: 1,
+  },
+  visualizerFallback: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: '#000',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  fallbackText: {
+    color: '#6B7280',
+    fontSize: 14,
     letterSpacing: 1,
   },
 });
