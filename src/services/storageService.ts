@@ -248,3 +248,54 @@ const rowToEpisode = (row: any): Episode => ({
   fileSize: row.fileSize,
   chapters: row.chapters ? JSON.parse(row.chapters) : null,
 });
+
+// Playback state persistence
+export interface PlaybackState {
+  currentEpisodeId: string | null;
+  currentTime: number;
+  playbackRate: number;
+}
+
+export const savePlaybackState = async (state: PlaybackState): Promise<void> => {
+  const db = await getDatabase();
+  await db.runAsync(
+    `UPDATE playback_state SET currentEpisodeId = ?, currentTime = ?, playbackRate = ? WHERE id = 1`,
+    [state.currentEpisodeId, state.currentTime, state.playbackRate]
+  );
+};
+
+export const getPlaybackState = async (): Promise<PlaybackState> => {
+  const db = await getDatabase();
+  const row = await db.getFirstAsync<any>(
+    'SELECT * FROM playback_state WHERE id = 1'
+  );
+  return {
+    currentEpisodeId: row?.currentEpisodeId || null,
+    currentTime: row?.currentTime || 0,
+    playbackRate: row?.playbackRate || 1.0,
+  };
+};
+
+// Queue operations with full episode data
+export const getQueueWithEpisodes = async (): Promise<Episode[]> => {
+  const db = await getDatabase();
+  const rows = await db.getAllAsync<any>(
+    `SELECT e.* FROM queue q
+     INNER JOIN episodes e ON q.episodeId = e.id
+     ORDER BY q.position`
+  );
+  return rows.map(rowToEpisode);
+};
+
+export const saveQueueWithEpisodes = async (episodes: Episode[]): Promise<void> => {
+  const db = await getDatabase();
+  // Clear existing queue
+  await db.runAsync('DELETE FROM queue');
+  // Insert episodes in order
+  for (let i = 0; i < episodes.length; i++) {
+    await db.runAsync(
+      'INSERT INTO queue (episodeId, position) VALUES (?, ?)',
+      [episodes[i].id, i]
+    );
+  }
+};

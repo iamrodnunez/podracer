@@ -90,6 +90,22 @@ export const initializeDatabase = async (): Promise<void> => {
   await database.execAsync(`
     CREATE INDEX IF NOT EXISTS idx_history_playedAt ON history(playedAt);
   `);
+
+  // Create playback_state table for persisting current playback
+  await database.execAsync(`
+    CREATE TABLE IF NOT EXISTS playback_state (
+      id INTEGER PRIMARY KEY CHECK (id = 1),
+      currentEpisodeId TEXT,
+      currentTime REAL DEFAULT 0,
+      playbackRate REAL DEFAULT 1.0,
+      FOREIGN KEY (currentEpisodeId) REFERENCES episodes(id) ON DELETE SET NULL
+    );
+  `);
+
+  // Initialize playback_state with a single row if not exists
+  await database.runAsync(`
+    INSERT OR IGNORE INTO playback_state (id) VALUES (1)
+  `);
 };
 
 export const clearDatabase = async (): Promise<void> => {

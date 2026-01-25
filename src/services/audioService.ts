@@ -1,4 +1,5 @@
 import { Audio } from 'expo-av';
+import { AppState, AppStateStatus } from 'react-native';
 import { Episode, Podcast } from '../types/podcast';
 import { usePlayerStore } from '../store/usePlayerStore';
 import { useQueueStore } from '../store/useQueueStore';
@@ -6,6 +7,8 @@ import * as storageService from './storageService';
 
 let sound: Audio.Sound | null = null;
 let isServiceInitialized = false;
+let positionSaveInterval: NodeJS.Timeout | null = null;
+let appStateSubscription: ReturnType<typeof AppState.addEventListener> | null = null;
 
 export const setupPlayer = async (): Promise<boolean> => {
   if (isServiceInitialized) return true;
@@ -19,11 +22,61 @@ export const setupPlayer = async (): Promise<boolean> => {
       playThroughEarpieceAndroid: false,
     });
 
+    // Set up app state listener to save position when app goes to background
+    appStateSubscription = AppState.addEventListener('change', handleAppStateChange);
+
     isServiceInitialized = true;
     return true;
   } catch (error) {
     console.error('Error setting up player:', error);
     return false;
+  }
+};
+
+const handleAppStateChange = async (nextAppState: AppStateStatus) => {
+  if (nextAppState === 'background' || nextAppState === 'inactive') {
+    await saveCurrentPositionAndState();
+  }
+};
+
+const startPositionSaveInterval = () => {
+  if (positionSaveInterval) return;
+
+  positionSaveInterval = setInterval(async () => {
+    await saveCurrentPositionAndState();
+  }, 10000); // Save every 10 seconds
+};
+
+const stopPositionSaveInterval = () => {
+  if (positionSaveInterval) {
+    clearInterval(positionSaveInterval);
+    positionSaveInterval = null;
+  }
+};
+
+const saveCurrentPositionAndState = async () => {
+  const store = usePlayerStore.getState();
+  const episode = store.currentEpisode;
+
+  if (episode && sound) {
+    try {
+      const status = await sound.getStatusAsync();
+      if (status.isLoaded && status.positionMillis > 0) {
+        const positionSeconds = Math.floor(status.positionMillis / 1000);
+
+        // Save to episode record
+        await storageService.updateEpisodePlaybackPosition(episode.id, positionSeconds);
+
+        // Save playback state
+        await storageService.savePlaybackState({
+          currentEpisodeId: episode.id,
+          currentTime: positionSeconds,
+          playbackRate: store.playbackRate,
+        });
+      }
+    } catch (error) {
+      console.error('Error saving position:', error);
+    }
   }
 };
 
@@ -82,6 +135,16 @@ export const playEpisode = async (
     playerStore.setCurrentEpisode(episode);
     playerStore.setIsPlaying(true);
 
+    // Start periodic position saving
+    startPositionSaveInterval();
+
+    // Save playback state
+    await storageService.savePlaybackState({
+      currentEpisodeId: episode.id,
+      currentTime: episode.playbackPosition || 0,
+      playbackRate: playerStore.playbackRate,
+    });
+
     // Add to history
     await storageService.addToHistory(episode.id);
   } catch (error) {
@@ -123,6 +186,8 @@ export const pause = async (): Promise<void> => {
   if (sound) {
     await sound.pauseAsync();
     usePlayerStore.getState().setIsPlaying(false);
+    // Save position when pausing
+    await saveCurrentPositionAndState();
   }
 };
 
@@ -172,6 +237,9 @@ export const stop = async (): Promise<void> => {
   const store = usePlayerStore.getState();
   const episode = store.currentEpisode;
 
+  // Stop the position save interval
+  stopPositionSaveInterval();
+
   // Save playback position before stopping
   if (episode && sound) {
     const status = await sound.getStatusAsync();
@@ -189,6 +257,13 @@ export const stop = async (): Promise<void> => {
   }
 
   store.setIsPlaying(false);
+
+  // Clear playback state
+  await storageService.savePlaybackState({
+    currentEpisodeId: null,
+    currentTime: 0,
+    playbackRate: store.playbackRate,
+  });
 };
 
 export const getProgress = async () => {
@@ -197,7 +272,7 @@ export const getProgress = async () => {
     if (status.isLoaded) {
       return {
         position: status.positionMillis / 1000,
-        duration: status.durationMillis / 1000,
+        duration: (status.durationMillis || 0) / 1000,
       };
     }
   }
@@ -257,4 +332,51 @@ export const clearSleepTimer = (): void => {
 // Playback service placeholder (not needed for expo-av)
 export const PlaybackService = async () => {
   // No-op for expo-av implementation
+};
+
+// Restore playback state on app start
+export const restorePlaybackState = async (): Promise<void> => {
+  try {
+    const state = await storageService.getPlaybackState();
+    const playerStore = usePlayerStore.getState();
+
+    if (state.currentEpisodeId) {
+      const episode = await storageService.getEpisode(state.currentEpisodeId);
+      if (episode) {
+        // Update episode with saved position
+        const episodeWithPosition = {
+          ...episode,
+          playbackPosition: state.currentTime,
+        };
+        playerStore.setCurrentEpisode(episodeWithPosition);
+        playerStore.setCurrentTime(state.currentTime);
+        playerStore.setPlaybackRate(state.playbackRate);
+        // Don't auto-play, just restore state
+      }
+    }
+  } catch (error) {
+    console.error('Error restoring playback state:', error);
+  }
+};
+
+// Restore queue from storage
+export const restoreQueue = async (): Promise<void> => {
+  try {
+    const queueEpisodes = await storageService.getQueueWithEpisodes();
+    const queueStore = useQueueStore.getState();
+    // Pass false to avoid persisting what we just loaded
+    queueStore.setQueue(queueEpisodes, false);
+  } catch (error) {
+    console.error('Error restoring queue:', error);
+  }
+};
+
+// Save queue to storage (call this whenever queue changes)
+export const persistQueue = async (): Promise<void> => {
+  try {
+    const { queue } = useQueueStore.getState();
+    await storageService.saveQueueWithEpisodes(queue);
+  } catch (error) {
+    console.error('Error persisting queue:', error);
+  }
 };

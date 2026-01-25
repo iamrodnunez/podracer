@@ -25,7 +25,7 @@ import { Logo } from './src/components/common';
 import { usePlayerStore } from './src/store/usePlayerStore';
 import { usePodcastStore } from './src/store/usePodcastStore';
 import { initializeDatabase } from './src/db/schema';
-import { setupPlayer } from './src/services/audioService';
+import { setupPlayer, restorePlaybackState, restoreQueue } from './src/services/audioService';
 
 const Tab = createBottomTabNavigator();
 const Stack = createStackNavigator();
@@ -326,6 +326,9 @@ export default function App() {
       try {
         await initializeDatabase();
         await setupPlayer();
+        // Restore playback state and queue from storage
+        await restorePlaybackState();
+        await restoreQueue();
         setIsReady(true);
       } catch (err) {
         console.error('Initialization error:', err);
