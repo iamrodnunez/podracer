@@ -8,7 +8,7 @@ import {
   Image,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
-import { GLVisualizer } from '../components/visualizer';
+import { Visualizer } from '../components/visualizer';
 import { PlaybackControls } from '../components/player';
 import { usePlayerStore } from '../store/usePlayerStore';
 import { ProgressSlider } from '../components/player';
@@ -154,7 +154,7 @@ export const VisualizerScreen: React.FC = () => {
   return (
     <View style={styles.container}>
       <VisualizerErrorBoundary fallback={visualizerFallback}>
-        <GLVisualizer presetId={currentPresetId} />
+        <Visualizer presetId={currentPresetId} />
       </VisualizerErrorBoundary>
 
       {artworkUrl && (
