@@ -24,6 +24,12 @@
     },
     "web": {
       "favicon": "./assets/favicon.png"
-    }
+    },
+    "extra": {
+      "eas": {
+        "projectId": "0abd5e4f-018e-40c9-952a-f0dee4c5094c"
+      }
+    },
+    "owner": "iamrodnunez"
   }
 }
