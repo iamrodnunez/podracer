@@ -3,7 +3,9 @@ import { AppState, AppStateStatus } from 'react-native';
 import { Episode, Podcast } from '../types/podcast';
 import { usePlayerStore } from '../store/usePlayerStore';
 import { useQueueStore } from '../store/useQueueStore';
+import { usePodcastStore } from '../store/usePodcastStore';
 import * as storageService from './storageService';
+import * as downloadService from './downloadService';
 
 let sound: Audio.Sound | null = null;
 let isServiceInitialized = false;
@@ -112,6 +114,9 @@ export const playEpisode = async (
       }
     }
 
+    // Remove the episode we're about to play from the queue if it's there
+    queueStore.removeFromQueue(episode.id);
+
     // Unload previous sound
     if (sound) {
       await sound.unloadAsync();
@@ -155,7 +160,7 @@ export const playEpisode = async (
   }
 };
 
-const onPlaybackStatusUpdate = (status: any) => {
+const onPlaybackStatusUpdate = async (status: any) => {
   const store = usePlayerStore.getState();
 
   if (status.isLoaded) {
@@ -165,12 +170,49 @@ const onPlaybackStatusUpdate = (status: any) => {
     store.setIsLoading(status.isBuffering);
 
     if (status.didJustFinish) {
-      // Mark as played when finished
       const episode = store.currentEpisode;
       if (episode) {
-        storageService.markEpisodePlayed(episode.id, true);
+        // Mark as played
+        await storageService.markEpisodePlayed(episode.id, true);
+
+        // Update the episode in the store
+        usePodcastStore.getState().updateEpisode(episode.id, {
+          isPlayed: true,
+          playbackPosition: 0,
+        });
+
+        // If episode was downloaded, delete the download
+        if (episode.isDownloaded && episode.downloadPath) {
+          try {
+            await downloadService.deleteDownload(episode);
+          } catch (error) {
+            console.error('Error deleting download after playback:', error);
+          }
+        }
+
+        // Remove the finished episode from queue if it's there
+        const queueStore = useQueueStore.getState();
+        queueStore.removeFromQueue(episode.id);
+
+        // Check if there's a next episode in the queue
+        const { queue } = useQueueStore.getState();
+        if (queue.length > 0) {
+          const nextEpisode = queue[0];
+          // Play next episode from queue
+          // Use setTimeout to avoid issues with async in status callback
+          setTimeout(() => {
+            playEpisode(nextEpisode).catch((err) => {
+              console.error('Error playing next episode:', err);
+            });
+          }, 500);
+        } else {
+          // No more episodes in queue, just stop
+          store.setIsPlaying(false);
+          stopPositionSaveInterval();
+        }
+      } else {
+        store.setIsPlaying(false);
       }
-      store.setIsPlaying(false);
     }
   }
 };
