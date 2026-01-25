@@ -104,6 +104,25 @@ export class AudioAnalyzer {
   private analyze = (): void => {
     if (!this.isRunning) return;
 
+    // Check if audio is actually playing
+    const { isPlaying } = usePlayerStore.getState();
+
+    // If not playing, return silent/zero data
+    if (!isPlaying) {
+      const silentData: AudioAnalysisData = {
+        waveform: new Float32Array(FFT_SIZE),
+        spectrum: new Float32Array(FFT_SIZE),
+        bass: 0,
+        mid: 0,
+        treble: 0,
+        volume: 0,
+        beat: false,
+      };
+      this.callbacks.forEach((callback) => callback(silentData));
+      this.frameId = requestAnimationFrame(this.analyze);
+      return;
+    }
+
     const time = (Date.now() - this.startTime) / 1000;
 
     const waveform = generateWaveform(time, this.intensity);

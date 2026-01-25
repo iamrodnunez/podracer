@@ -12,7 +12,7 @@ export const parseRSSFeed = async (feedUrl: string): Promise<RSSFeed> => {
   try {
     const response = await fetch(feedUrl, {
       headers: {
-        'User-Agent': 'PodcastPlayer/1.0',
+        'User-Agent': 'Podracer/1.0',
         Accept: 'application/rss+xml, application/xml, text/xml',
       },
     });

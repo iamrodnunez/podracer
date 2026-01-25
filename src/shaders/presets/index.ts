@@ -1,7 +1,9 @@
 import { ShaderPreset } from '../../types/visualization';
 
 // Common vertex shader used by all presets
+// Note: precision is required for Android compatibility
 const commonVertexShader = `
+precision highp float;
 attribute vec2 position;
 void main() {
   gl_Position = vec4(position, 0.0, 1.0);

@@ -1,5 +1,5 @@
 import React, { useCallback, useRef, useEffect, useState } from 'react';
-import { View, StyleSheet, Dimensions } from 'react-native';
+import { View, StyleSheet, Dimensions, Platform } from 'react-native';
 import { GLView, ExpoWebGLRenderingContext } from 'expo-gl';
 import { useAudioAnalysis } from '../../hooks/useAudioAnalysis';
 import { useSettingsStore } from '../../store/useSettingsStore';
@@ -54,13 +54,19 @@ export const GLVisualizer: React.FC<GLVisualizerProps> = ({
   const createShader = useCallback(
     (gl: ExpoWebGLRenderingContext, type: number, source: string) => {
       const shader = gl.createShader(type);
-      if (!shader) return null;
+      if (!shader) {
+        console.error('Failed to create shader');
+        return null;
+      }
 
       gl.shaderSource(shader, source);
       gl.compileShader(shader);
 
       if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
-        console.error('Shader compilation error:', gl.getShaderInfoLog(shader));
+        const info = gl.getShaderInfoLog(shader);
+        console.error('Shader compilation error:', info);
+        console.error('Shader type:', type === gl.VERTEX_SHADER ? 'vertex' : 'fragment');
+        console.error('Platform:', Platform.OS);
         gl.deleteShader(shader);
         return null;
       }
@@ -235,6 +241,8 @@ export const GLVisualizer: React.FC<GLVisualizerProps> = ({
           { width: dimensions.width, height: dimensions.height },
         ]}
         onContextCreate={onContextCreate}
+        // Disable MSAA on Android for better compatibility
+        msaaSamples={Platform.OS === 'android' ? 0 : 4}
       />
     </View>
   );

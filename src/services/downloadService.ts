@@ -4,6 +4,7 @@ import * as storageService from './storageService';
 import { usePodcastStore } from '../store/usePodcastStore';
 
 const DOWNLOAD_DIRECTORY = `${FileSystem.documentDirectory}podcasts/`;
+const USER_AGENT = 'Podracer/1.0';
 
 interface DownloadProgress {
   episodeId: string;
@@ -63,7 +64,11 @@ export const downloadEpisode = async (
   const downloadResumable = FileSystem.createDownloadResumable(
     episode.audioUrl,
     downloadPath,
-    {},
+    {
+      headers: {
+        'User-Agent': USER_AGENT,
+      },
+    },
     (downloadProgress) => {
       const progress =
         downloadProgress.totalBytesWritten /
