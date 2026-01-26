@@ -31,188 +31,258 @@ const getStyleFromPresetId = (presetId?: string): VisualizerStyle => {
   }
 };
 
-// Vibrant color palettes
-const palettes: Record<VisualizerStyle, string[]> = {
-  plasma: ['#ff0080', '#ff00ff', '#8000ff', '#0080ff', '#00ffff'],
-  waveform: ['#00ff00', '#00ffaa', '#00ffff', '#00aaff', '#0066ff'],
-  spectrum: ['#ff0000', '#ff4400', '#ff8800', '#ffcc00', '#ffff00', '#88ff00'],
-  kaleidoscope: ['#ff00ff', '#aa00ff', '#5500ff', '#0055ff', '#00aaff', '#00ffff'],
-  tunnel: ['#4400ff', '#6600ff', '#8800ff', '#aa00ff', '#cc00ff', '#ff00ff'],
-  nebula: ['#ff0066', '#ff0099', '#ff00cc', '#cc00ff', '#9900ff', '#6600ff'],
-  fractal: ['#00ffff', '#00ccff', '#0099ff', '#0066ff', '#0033ff', '#0000ff'],
-  vortex: ['#ff0000', '#ff0066', '#ff00cc', '#cc00ff', '#6600ff', '#0000ff'],
-};
-
 export const CanvasVisualizer: React.FC<CanvasVisualizerProps> = ({ presetId }) => {
   const analysisData = useAudioAnalysis();
   const sensitivity = useSettingsStore((state) => state.visualizer.sensitivity);
   const style = getStyleFromPresetId(presetId);
-  const palette = palettes[style];
 
-  // Core animated values
+  // Audio reactive values
   const bassAnim = useRef(new Animated.Value(0)).current;
   const midAnim = useRef(new Animated.Value(0)).current;
   const trebleAnim = useRef(new Animated.Value(0)).current;
-  const rotation = useRef(new Animated.Value(0)).current;
-  const pulse = useRef(new Animated.Value(0)).current;
 
-  // Continuous rotation
+  // Multiple rotation animations at different speeds
+  const rotation1 = useRef(new Animated.Value(0)).current;
+  const rotation2 = useRef(new Animated.Value(0)).current;
+  const rotation3 = useRef(new Animated.Value(0)).current;
+
+  // Pulsing animations
+  const pulse1 = useRef(new Animated.Value(0)).current;
+  const pulse2 = useRef(new Animated.Value(0)).current;
+  const pulse3 = useRef(new Animated.Value(0)).current;
+
+  // Color shift animations
+  const colorShift1 = useRef(new Animated.Value(0)).current;
+  const colorShift2 = useRef(new Animated.Value(0)).current;
+
+  // Wave animations
+  const wave1 = useRef(new Animated.Value(0)).current;
+  const wave2 = useRef(new Animated.Value(0)).current;
+
+  // Scale breathing
+  const breathe1 = useRef(new Animated.Value(0)).current;
+  const breathe2 = useRef(new Animated.Value(0)).current;
+
+  // Start all continuous animations
   useEffect(() => {
-    const rotationLoop = Animated.loop(
-      Animated.timing(rotation, {
-        toValue: 1,
-        duration: 12000,
-        easing: Easing.linear,
-        useNativeDriver: true,
-      })
+    // Rotations at different speeds
+    const rot1 = Animated.loop(
+      Animated.timing(rotation1, { toValue: 1, duration: 8000, easing: Easing.linear, useNativeDriver: true })
     );
-    rotationLoop.start();
+    const rot2 = Animated.loop(
+      Animated.timing(rotation2, { toValue: 1, duration: 12000, easing: Easing.linear, useNativeDriver: true })
+    );
+    const rot3 = Animated.loop(
+      Animated.timing(rotation3, { toValue: 1, duration: 20000, easing: Easing.linear, useNativeDriver: true })
+    );
 
-    // Subtle continuous pulse
-    const pulseLoop = Animated.loop(
+    // Pulsing at different rates
+    const p1 = Animated.loop(
       Animated.sequence([
-        Animated.timing(pulse, {
-          toValue: 1,
-          duration: 2000,
-          easing: Easing.inOut(Easing.sin),
-          useNativeDriver: true,
-        }),
-        Animated.timing(pulse, {
-          toValue: 0,
-          duration: 2000,
-          easing: Easing.inOut(Easing.sin),
-          useNativeDriver: true,
-        }),
+        Animated.timing(pulse1, { toValue: 1, duration: 1500, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
+        Animated.timing(pulse1, { toValue: 0, duration: 1500, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
       ])
     );
-    pulseLoop.start();
+    const p2 = Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulse2, { toValue: 1, duration: 2000, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
+        Animated.timing(pulse2, { toValue: 0, duration: 2000, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
+      ])
+    );
+    const p3 = Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulse3, { toValue: 1, duration: 3000, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
+        Animated.timing(pulse3, { toValue: 0, duration: 3000, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
+      ])
+    );
+
+    // Color cycling
+    const c1 = Animated.loop(
+      Animated.timing(colorShift1, { toValue: 1, duration: 5000, easing: Easing.linear, useNativeDriver: false })
+    );
+    const c2 = Animated.loop(
+      Animated.timing(colorShift2, { toValue: 1, duration: 7000, easing: Easing.linear, useNativeDriver: false })
+    );
+
+    // Wave oscillation
+    const w1 = Animated.loop(
+      Animated.sequence([
+        Animated.timing(wave1, { toValue: 1, duration: 1000, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
+        Animated.timing(wave1, { toValue: -1, duration: 1000, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
+        Animated.timing(wave1, { toValue: 0, duration: 1000, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
+      ])
+    );
+    const w2 = Animated.loop(
+      Animated.sequence([
+        Animated.timing(wave2, { toValue: 1, duration: 1500, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
+        Animated.timing(wave2, { toValue: -1, duration: 1500, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
+      ])
+    );
+
+    // Breathing
+    const b1 = Animated.loop(
+      Animated.sequence([
+        Animated.timing(breathe1, { toValue: 1, duration: 2500, easing: Easing.inOut(Easing.quad), useNativeDriver: true }),
+        Animated.timing(breathe1, { toValue: 0, duration: 2500, easing: Easing.inOut(Easing.quad), useNativeDriver: true }),
+      ])
+    );
+    const b2 = Animated.loop(
+      Animated.sequence([
+        Animated.timing(breathe2, { toValue: 1, duration: 3500, easing: Easing.inOut(Easing.quad), useNativeDriver: true }),
+        Animated.timing(breathe2, { toValue: 0, duration: 3500, easing: Easing.inOut(Easing.quad), useNativeDriver: true }),
+      ])
+    );
+
+    rot1.start(); rot2.start(); rot3.start();
+    p1.start(); p2.start(); p3.start();
+    c1.start(); c2.start();
+    w1.start(); w2.start();
+    b1.start(); b2.start();
 
     return () => {
-      rotationLoop.stop();
-      pulseLoop.stop();
+      rot1.stop(); rot2.stop(); rot3.stop();
+      p1.stop(); p2.stop(); p3.stop();
+      c1.stop(); c2.stop();
+      w1.stop(); w2.stop();
+      b1.stop(); b2.stop();
     };
-  }, [rotation, pulse]);
+  }, []);
 
-  // Audio response - throttled
-  const lastUpdate = useRef(0);
+  // Audio response
   useEffect(() => {
-    const now = Date.now();
-    if (now - lastUpdate.current < 40) return;
-    lastUpdate.current = now;
-
     const { bass, mid, treble } = analysisData;
     const sens = sensitivity;
 
     Animated.parallel([
-      Animated.timing(bassAnim, {
-        toValue: bass * sens,
-        duration: 60,
-        useNativeDriver: true,
-      }),
-      Animated.timing(midAnim, {
-        toValue: mid * sens,
-        duration: 60,
-        useNativeDriver: true,
-      }),
-      Animated.timing(trebleAnim, {
-        toValue: treble * sens,
-        duration: 60,
-        useNativeDriver: true,
-      }),
+      Animated.timing(bassAnim, { toValue: bass * sens, duration: 50, useNativeDriver: true }),
+      Animated.timing(midAnim, { toValue: mid * sens, duration: 50, useNativeDriver: true }),
+      Animated.timing(trebleAnim, { toValue: treble * sens, duration: 50, useNativeDriver: true }),
     ]).start();
-  }, [analysisData, sensitivity, bassAnim, midAnim, trebleAnim]);
+  }, [analysisData, sensitivity]);
 
-  // Interpolations
-  const rotationDeg = rotation.interpolate({
-    inputRange: [0, 1],
-    outputRange: ['0deg', '360deg'],
+  // Rotation interpolations
+  const rot1Deg = rotation1.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '360deg'] });
+  const rot1DegRev = rotation1.interpolate({ inputRange: [0, 1], outputRange: ['360deg', '0deg'] });
+  const rot2Deg = rotation2.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '360deg'] });
+  const rot2DegRev = rotation2.interpolate({ inputRange: [0, 1], outputRange: ['360deg', '0deg'] });
+  const rot3Deg = rotation3.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '360deg'] });
+
+  // Color interpolations for psychedelic shifting
+  const bgColor1 = colorShift1.interpolate({
+    inputRange: [0, 0.25, 0.5, 0.75, 1],
+    outputRange: ['#ff0080', '#8000ff', '#0080ff', '#00ff80', '#ff0080'],
   });
-  const rotationDegReverse = rotation.interpolate({
-    inputRange: [0, 1],
-    outputRange: ['360deg', '0deg'],
+  const bgColor2 = colorShift2.interpolate({
+    inputRange: [0, 0.33, 0.66, 1],
+    outputRange: ['#ff00ff', '#00ffff', '#ffff00', '#ff00ff'],
   });
-  const rotationDegSlow = rotation.interpolate({
-    inputRange: [0, 1],
-    outputRange: ['0deg', '180deg'],
+  const bgColor3 = colorShift1.interpolate({
+    inputRange: [0, 0.5, 1],
+    outputRange: ['#00ffff', '#ff00ff', '#00ffff'],
   });
 
-  // PLASMA - Large pulsing rings filling the screen
+  // Dynamic background
+  const backgroundColor = colorShift1.interpolate({
+    inputRange: [0, 0.5, 1],
+    outputRange: ['#000008', '#080010', '#000008'],
+  });
+
+  // PLASMA - Psychedelic flowing energy
   const renderPlasma = () => (
-    <View style={styles.fullScreen}>
-      {/* Outer expanding rings */}
-      {[0, 1, 2, 3, 4, 5].map((i) => {
-        const size = 150 + i * 120;
+    <Animated.View style={[styles.fullScreen, { backgroundColor }]}>
+      {/* Outer morphing rings */}
+      {[0, 1, 2, 3, 4, 5, 6].map((i) => {
+        const size = 120 + i * 100;
+        const color = i % 2 === 0 ? bgColor1 : bgColor2;
+        const rot = i % 3 === 0 ? rot1Deg : i % 3 === 1 ? rot2DegRev : rot3Deg;
+        const pulseVal = i % 2 === 0 ? pulse1 : pulse2;
+
         return (
           <Animated.View
-            key={`ring-${i}`}
+            key={i}
             style={[
               styles.absoluteCenter,
               {
                 width: size,
                 height: size,
                 borderRadius: size / 2,
-                borderWidth: 4 + (5 - i),
-                borderColor: palette[i % palette.length],
+                borderWidth: 3 + (7 - i),
+                borderColor: color,
                 transform: [
-                  { scale: Animated.add(1, Animated.multiply(bassAnim, 0.4 - i * 0.05)) },
-                  { rotate: i % 2 === 0 ? rotationDeg : rotationDegReverse },
+                  { scale: Animated.add(Animated.add(1, Animated.multiply(bassAnim, 0.4)), Animated.multiply(pulseVal, 0.15)) },
+                  { rotate: rot },
                 ],
-                opacity: Animated.add(0.6, Animated.multiply(bassAnim, 0.3)),
+                opacity: Animated.add(0.5, Animated.multiply(Animated.add(bassAnim, pulseVal), 0.25)),
               },
             ]}
           />
         );
       })}
-      {/* Corner accents */}
-      {[0, 1, 2, 3].map((corner) => (
-        <Animated.View
-          key={`corner-${corner}`}
-          style={[
-            styles.cornerGlow,
-            {
-              top: corner < 2 ? -50 : undefined,
-              bottom: corner >= 2 ? -50 : undefined,
-              left: corner % 2 === 0 ? -50 : undefined,
-              right: corner % 2 === 1 ? -50 : undefined,
-              backgroundColor: palette[corner % palette.length],
-              transform: [{ scale: Animated.add(1, Animated.multiply(midAnim, 0.5)) }],
-              opacity: Animated.add(0.3, Animated.multiply(bassAnim, 0.4)),
-            },
-          ]}
-        />
-      ))}
-      {/* Center glow */}
+      {/* Floating orbs */}
+      {[0, 1, 2, 3].map((i) => {
+        const angle = (i / 4) * Math.PI * 2;
+        const dist = 150;
+        const color = i % 2 === 0 ? bgColor2 : bgColor3;
+        const pulseVal = i % 2 === 0 ? pulse1 : pulse3;
+
+        return (
+          <Animated.View
+            key={`orb-${i}`}
+            style={[
+              styles.floatingOrb,
+              {
+                left: width / 2 + Math.cos(angle) * dist - 40,
+                top: height / 2 + Math.sin(angle) * dist - 40,
+                backgroundColor: color,
+                transform: [
+                  { scale: Animated.add(1, Animated.add(Animated.multiply(midAnim, 0.6), Animated.multiply(pulseVal, 0.3))) },
+                  { translateX: Animated.multiply(wave1, 20) },
+                  { translateY: Animated.multiply(wave2, 20) },
+                ],
+                opacity: Animated.add(0.4, Animated.multiply(bassAnim, 0.4)),
+              },
+            ]}
+          />
+        );
+      })}
+      {/* Center pulsing core */}
       <Animated.View
         style={[
           styles.absoluteCenter,
-          styles.centerGlow,
+          styles.plasmaCore,
           {
-            backgroundColor: palette[0],
-            transform: [{ scale: Animated.add(1.5, Animated.multiply(bassAnim, 1)) }],
-            opacity: Animated.add(0.4, Animated.multiply(bassAnim, 0.5)),
+            backgroundColor: bgColor1,
+            transform: [
+              { scale: Animated.add(1.5, Animated.add(Animated.multiply(bassAnim, 1.2), Animated.multiply(pulse1, 0.4))) },
+            ],
+            opacity: Animated.add(0.5, Animated.multiply(bassAnim, 0.5)),
           },
         ]}
       />
-    </View>
+    </Animated.View>
   );
 
-  // WAVEFORM - Horizontal bands across the screen
+  // WAVEFORM - Undulating energy waves
   const renderWaveform = () => (
-    <View style={styles.fullScreen}>
-      {/* Multiple wave bands */}
-      {[-4, -3, -2, -1, 0, 1, 2, 3, 4].map((i) => {
-        const audioVal = Math.abs(i) <= 1 ? bassAnim : Math.abs(i) <= 2 ? midAnim : trebleAnim;
+    <Animated.View style={[styles.fullScreen, { backgroundColor }]}>
+      {/* Multiple wave layers */}
+      {[-5, -4, -3, -2, -1, 0, 1, 2, 3, 4, 5].map((i) => {
+        const color = Math.abs(i) <= 1 ? bgColor1 : Math.abs(i) <= 3 ? bgColor2 : bgColor3;
+        const audioVal = Math.abs(i) <= 1 ? bassAnim : Math.abs(i) <= 3 ? midAnim : trebleAnim;
+        const waveVal = i % 2 === 0 ? wave1 : wave2;
+
         return (
           <Animated.View
-            key={`wave-${i}`}
+            key={i}
             style={[
               styles.waveBand,
               {
-                top: height / 2 + i * 40 - 15,
-                backgroundColor: palette[Math.abs(i) % palette.length],
+                top: height / 2 + i * 35 - 20,
+                backgroundColor: color,
                 transform: [
-                  { scaleX: Animated.add(0.2, Animated.multiply(audioVal, 0.8)) },
-                  { scaleY: Animated.add(0.8, Animated.multiply(trebleAnim, 0.4)) },
+                  { scaleX: Animated.add(0.3, Animated.add(Animated.multiply(audioVal, 0.7), Animated.multiply(Animated.abs(waveVal), 0.2))) },
+                  { scaleY: Animated.add(1, Animated.multiply(pulse1, 0.3)) },
+                  { translateX: Animated.multiply(waveVal, 30 * (i % 3)) },
                 ],
                 opacity: Animated.add(0.5, Animated.multiply(audioVal, 0.4)),
               },
@@ -220,7 +290,7 @@ export const CanvasVisualizer: React.FC<CanvasVisualizerProps> = ({ presetId }) 
           />
         );
       })}
-      {/* Vertical side bars */}
+      {/* Vertical pulsing bars */}
       {[0, 1].map((side) => (
         <Animated.View
           key={`side-${side}`}
@@ -229,37 +299,44 @@ export const CanvasVisualizer: React.FC<CanvasVisualizerProps> = ({ presetId }) 
             {
               left: side === 0 ? 0 : undefined,
               right: side === 1 ? 0 : undefined,
-              backgroundColor: palette[side],
-              transform: [{ scaleY: Animated.add(0.3, Animated.multiply(bassAnim, 0.7)) }],
-              opacity: Animated.add(0.4, Animated.multiply(bassAnim, 0.5)),
+              backgroundColor: side === 0 ? bgColor1 : bgColor2,
+              transform: [
+                { scaleY: Animated.add(0.4, Animated.multiply(bassAnim, 0.6)) },
+                { scaleX: Animated.add(1, Animated.multiply(pulse2, 0.5)) },
+              ],
+              opacity: Animated.add(0.5, Animated.multiply(bassAnim, 0.4)),
             },
           ]}
         />
       ))}
-    </View>
+    </Animated.View>
   );
 
-  // SPECTRUM - Full height bars
+  // SPECTRUM - Dancing frequency bars
   const renderSpectrum = () => {
-    const barCount = 20;
+    const barCount = 24;
     const barWidth = width / barCount;
 
     return (
-      <View style={styles.fullScreen}>
-        {/* Bottom bars */}
+      <Animated.View style={[styles.fullScreen, { backgroundColor }]}>
         <View style={styles.spectrumBottom}>
           {Array.from({ length: barCount }).map((_, i) => {
             const normalized = i / barCount;
             const audioVal = normalized < 0.33 ? bassAnim : normalized < 0.66 ? midAnim : trebleAnim;
+            const color = normalized < 0.33 ? bgColor1 : normalized < 0.66 ? bgColor2 : bgColor3;
+            const pulseVal = i % 3 === 0 ? pulse1 : i % 3 === 1 ? pulse2 : pulse3;
+
             return (
               <Animated.View
-                key={`bar-${i}`}
+                key={i}
                 style={[
                   styles.spectrumBar,
                   {
-                    width: barWidth - 3,
-                    backgroundColor: palette[Math.floor(normalized * (palette.length - 1))],
-                    transform: [{ scaleY: Animated.add(0.15, Animated.multiply(audioVal, 1.2)) }],
+                    width: barWidth - 2,
+                    backgroundColor: color,
+                    transform: [
+                      { scaleY: Animated.add(0.1, Animated.add(Animated.multiply(audioVal, 1.3), Animated.multiply(pulseVal, 0.15))) },
+                    ],
                     opacity: Animated.add(0.7, Animated.multiply(audioVal, 0.3)),
                   },
                 ]}
@@ -267,20 +344,21 @@ export const CanvasVisualizer: React.FC<CanvasVisualizerProps> = ({ presetId }) 
             );
           })}
         </View>
-        {/* Top mirrored bars */}
         <View style={styles.spectrumTop}>
           {Array.from({ length: barCount }).map((_, i) => {
             const normalized = i / barCount;
             const audioVal = normalized < 0.33 ? bassAnim : normalized < 0.66 ? midAnim : trebleAnim;
+            const color = normalized < 0.33 ? bgColor2 : normalized < 0.66 ? bgColor3 : bgColor1;
+
             return (
               <Animated.View
-                key={`bar-top-${i}`}
+                key={i}
                 style={[
                   styles.spectrumBar,
                   {
-                    width: barWidth - 3,
-                    backgroundColor: palette[Math.floor(normalized * (palette.length - 1))],
-                    transform: [{ scaleY: Animated.add(0.1, Animated.multiply(audioVal, 0.6)) }],
+                    width: barWidth - 2,
+                    backgroundColor: color,
+                    transform: [{ scaleY: Animated.add(0.05, Animated.multiply(audioVal, 0.7)) }],
                     opacity: Animated.add(0.4, Animated.multiply(audioVal, 0.3)),
                   },
                 ]}
@@ -288,61 +366,75 @@ export const CanvasVisualizer: React.FC<CanvasVisualizerProps> = ({ presetId }) 
             );
           })}
         </View>
-      </View>
+      </Animated.View>
     );
   };
 
-  // KALEIDOSCOPE - Large rotating pattern
+  // KALEIDOSCOPE - Hypnotic symmetrical patterns
   const renderKaleidoscope = () => (
-    <View style={styles.fullScreen}>
-      {/* Outer rotating container */}
-      <Animated.View
-        style={[
-          styles.absoluteCenter,
-          styles.kaleidoOuter,
-          { transform: [{ rotate: rotationDeg }] },
-        ]}
-      >
-        {Array.from({ length: 12 }).map((_, i) => (
-          <Animated.View
-            key={`segment-${i}`}
-            style={[
-              styles.kaleidoSegment,
-              {
-                backgroundColor: palette[i % palette.length],
-                transform: [
-                  { rotate: `${i * 30}deg` },
-                  { translateY: -140 },
-                  { scaleY: Animated.add(1, Animated.multiply(bassAnim, 0.8)) },
-                  { scaleX: Animated.add(1, Animated.multiply(midAnim, 0.3)) },
-                ],
-                opacity: Animated.add(0.6, Animated.multiply(bassAnim, 0.3)),
-              },
-            ]}
-          />
-        ))}
+    <Animated.View style={[styles.fullScreen, { backgroundColor }]}>
+      {/* Outer rotating layer */}
+      <Animated.View style={[styles.absoluteCenter, styles.kaleidoOuter, { transform: [{ rotate: rot1Deg }] }]}>
+        {Array.from({ length: 16 }).map((_, i) => {
+          const color = i % 4 === 0 ? bgColor1 : i % 4 === 1 ? bgColor2 : i % 4 === 2 ? bgColor3 : bgColor1;
+          return (
+            <Animated.View
+              key={i}
+              style={[
+                styles.kaleidoSegment,
+                {
+                  backgroundColor: color,
+                  transform: [
+                    { rotate: `${i * 22.5}deg` },
+                    { translateY: -160 },
+                    { scaleY: Animated.add(1, Animated.add(Animated.multiply(bassAnim, 0.8), Animated.multiply(pulse1, 0.2))) },
+                    { scaleX: Animated.add(1, Animated.multiply(midAnim, 0.4)) },
+                  ],
+                  opacity: Animated.add(0.6, Animated.multiply(bassAnim, 0.3)),
+                },
+              ]}
+            />
+          );
+        })}
       </Animated.View>
-      {/* Inner counter-rotating */}
-      <Animated.View
-        style={[
-          styles.absoluteCenter,
-          styles.kaleidoInner,
-          { transform: [{ rotate: rotationDegReverse }, { scale: Animated.add(1, Animated.multiply(bassAnim, 0.3)) }] },
-        ]}
-      >
-        {Array.from({ length: 6 }).map((_, i) => (
+      {/* Middle counter-rotating layer */}
+      <Animated.View style={[styles.absoluteCenter, styles.kaleidoMiddle, { transform: [{ rotate: rot2DegRev }, { scale: Animated.add(1, Animated.multiply(breathe1, 0.2)) }] }]}>
+        {Array.from({ length: 12 }).map((_, i) => {
+          const color = i % 3 === 0 ? bgColor2 : i % 3 === 1 ? bgColor3 : bgColor1;
+          return (
+            <Animated.View
+              key={i}
+              style={[
+                styles.kaleidoMiddleSegment,
+                {
+                  backgroundColor: color,
+                  transform: [
+                    { rotate: `${i * 30}deg` },
+                    { translateY: -100 },
+                    { scaleY: Animated.add(1, Animated.multiply(midAnim, 0.6)) },
+                  ],
+                  opacity: Animated.add(0.7, Animated.multiply(midAnim, 0.3)),
+                },
+              ]}
+            />
+          );
+        })}
+      </Animated.View>
+      {/* Inner layer */}
+      <Animated.View style={[styles.absoluteCenter, { transform: [{ rotate: rot3Deg }] }]}>
+        {Array.from({ length: 8 }).map((_, i) => (
           <Animated.View
-            key={`inner-${i}`}
+            key={i}
             style={[
               styles.kaleidoInnerSegment,
               {
-                backgroundColor: palette[(i + 2) % palette.length],
+                backgroundColor: i % 2 === 0 ? bgColor1 : bgColor3,
                 transform: [
-                  { rotate: `${i * 60}deg` },
-                  { translateY: -70 },
-                  { scaleY: Animated.add(1, Animated.multiply(midAnim, 0.6)) },
+                  { rotate: `${i * 45}deg` },
+                  { translateY: -50 },
+                  { scaleY: Animated.add(1, Animated.multiply(trebleAnim, 0.5)) },
                 ],
-                opacity: Animated.add(0.7, Animated.multiply(midAnim, 0.3)),
+                opacity: Animated.add(0.8, Animated.multiply(trebleAnim, 0.2)),
               },
             ]}
           />
@@ -354,168 +446,191 @@ export const CanvasVisualizer: React.FC<CanvasVisualizerProps> = ({ presetId }) 
           styles.absoluteCenter,
           styles.kaleidoCenter,
           {
-            borderColor: palette[0],
-            transform: [
-              { rotate: rotationDegSlow },
-              { scale: Animated.add(1, Animated.multiply(bassAnim, 0.5)) },
-            ],
+            backgroundColor: bgColor1,
+            transform: [{ scale: Animated.add(1, Animated.add(Animated.multiply(bassAnim, 0.5), Animated.multiply(pulse2, 0.3))) }],
           },
         ]}
       />
-    </View>
+    </Animated.View>
   );
 
-  // TUNNEL - Concentric expanding rings
+  // TUNNEL - Infinite warp tunnel
   const renderTunnel = () => (
-    <View style={styles.fullScreen}>
-      {[0, 1, 2, 3, 4, 5, 6, 7].map((i) => {
-        const baseSize = 80 + i * 100;
+    <Animated.View style={[styles.fullScreen, { backgroundColor }]}>
+      {/* Expanding rings */}
+      {[0, 1, 2, 3, 4, 5, 6, 7, 8, 9].map((i) => {
+        const baseSize = 60 + i * 90;
+        const color = i % 3 === 0 ? bgColor1 : i % 3 === 1 ? bgColor2 : bgColor3;
+        const pulseVal = i % 2 === 0 ? pulse1 : pulse2;
+
         return (
           <Animated.View
-            key={`tunnel-${i}`}
+            key={i}
             style={[
               styles.absoluteCenter,
               {
                 width: baseSize,
                 height: baseSize,
                 borderRadius: baseSize / 2,
-                borderWidth: 3,
-                borderColor: palette[i % palette.length],
+                borderWidth: 4 - Math.floor(i / 3),
+                borderColor: color,
                 transform: [
-                  { scale: Animated.add(1, Animated.multiply(bassAnim, 0.3 * (8 - i) / 8)) },
+                  { scale: Animated.add(1, Animated.add(Animated.multiply(bassAnim, 0.3 * (10 - i) / 10), Animated.multiply(pulseVal, 0.1))) },
                 ],
-                opacity: Animated.subtract(
-                  Animated.add(0.8, Animated.multiply(pulse, 0.2)),
-                  i * 0.08
-                ),
+                opacity: Animated.subtract(0.9, i * 0.07),
               },
             ]}
           />
         );
       })}
-      {/* Radial lines */}
-      <Animated.View
-        style={[
-          styles.absoluteCenter,
-          { width: MAX_DIM, height: MAX_DIM, transform: [{ rotate: rotationDegSlow }] },
-        ]}
-      >
-        {Array.from({ length: 8 }).map((_, i) => (
+      {/* Rotating radial lines */}
+      <Animated.View style={[styles.absoluteCenter, { width: MAX_DIM, height: MAX_DIM, transform: [{ rotate: rot2Deg }] }]}>
+        {Array.from({ length: 12 }).map((_, i) => (
           <Animated.View
-            key={`line-${i}`}
+            key={i}
             style={[
               styles.tunnelLine,
               {
-                backgroundColor: palette[i % palette.length],
-                transform: [{ rotate: `${i * 45}deg` }],
-                opacity: Animated.add(0.2, Animated.multiply(trebleAnim, 0.3)),
+                backgroundColor: i % 3 === 0 ? bgColor1 : i % 3 === 1 ? bgColor2 : bgColor3,
+                transform: [{ rotate: `${i * 30}deg` }],
+                opacity: Animated.add(0.2, Animated.multiply(trebleAnim, 0.4)),
               },
             ]}
           />
         ))}
       </Animated.View>
-    </View>
-  );
-
-  // NEBULA - Floating glowing orbs
-  const renderNebula = () => (
-    <View style={styles.fullScreen}>
-      {/* Large background orbs */}
-      {[
-        { x: -100, y: -150, size: 300 },
-        { x: 100, y: -100, size: 250 },
-        { x: -80, y: 150, size: 280 },
-        { x: 120, y: 100, size: 220 },
-        { x: 0, y: 0, size: 200 },
-      ].map((orb, i) => (
-        <Animated.View
-          key={`orb-${i}`}
-          style={[
-            styles.nebulaOrb,
-            {
-              width: orb.size,
-              height: orb.size,
-              borderRadius: orb.size / 2,
-              left: width / 2 + orb.x - orb.size / 2,
-              top: height / 2 + orb.y - orb.size / 2,
-              backgroundColor: palette[i % palette.length],
-              transform: [
-                { scale: Animated.add(1, Animated.multiply(i < 2 ? bassAnim : midAnim, 0.4)) },
-                { rotate: i % 2 === 0 ? rotationDegSlow : rotationDegReverse },
-              ],
-              opacity: Animated.add(0.25, Animated.multiply(bassAnim, 0.25)),
-            },
-          ]}
-        />
-      ))}
-      {/* Smaller bright particles */}
-      {Array.from({ length: 12 }).map((_, i) => {
-        const angle = (i / 12) * Math.PI * 2;
-        const dist = 120 + (i % 3) * 60;
+      {/* Stars */}
+      {Array.from({ length: 20 }).map((_, i) => {
+        const angle = (i / 20) * Math.PI * 2;
+        const dist = 80 + (i % 5) * 50;
         return (
           <Animated.View
-            key={`particle-${i}`}
+            key={`star-${i}`}
             style={[
-              styles.nebulaParticle,
+              styles.star,
               {
-                left: width / 2 + Math.cos(angle) * dist - 8,
-                top: height / 2 + Math.sin(angle) * dist - 8,
-                backgroundColor: palette[i % palette.length],
-                transform: [{ scale: Animated.add(1, Animated.multiply(trebleAnim, 1)) }],
-                opacity: Animated.add(0.5, Animated.multiply(midAnim, 0.5)),
+                left: width / 2 + Math.cos(angle) * dist,
+                top: height / 2 + Math.sin(angle) * dist,
+                backgroundColor: i % 2 === 0 ? bgColor2 : bgColor3,
+                transform: [{ scale: Animated.add(0.5, Animated.multiply(trebleAnim, 1.5)) }],
+                opacity: Animated.add(0.3, Animated.multiply(midAnim, 0.6)),
               },
             ]}
           />
         );
       })}
-    </View>
+    </Animated.View>
   );
 
-  // FRACTAL - Nested rotating shapes
-  const renderFractal = () => (
-    <View style={styles.fullScreen}>
-      {/* Large outer shapes */}
-      {[0, 1, 2, 3, 4, 5].map((i) => {
-        const size = 80 + i * 70;
+  // NEBULA - Cosmic gas clouds
+  const renderNebula = () => (
+    <Animated.View style={[styles.fullScreen, { backgroundColor }]}>
+      {/* Large nebula clouds */}
+      {[
+        { x: -120, y: -180, size: 350 },
+        { x: 130, y: -120, size: 300 },
+        { x: -100, y: 160, size: 320 },
+        { x: 140, y: 130, size: 280 },
+        { x: 0, y: 0, size: 250 },
+      ].map((orb, i) => {
+        const color = i % 3 === 0 ? bgColor1 : i % 3 === 1 ? bgColor2 : bgColor3;
+        const rot = i % 2 === 0 ? rot3Deg : rot2DegRev;
+        const pulseVal = i % 2 === 0 ? pulse2 : pulse3;
+
         return (
           <Animated.View
-            key={`shape-${i}`}
+            key={i}
+            style={[
+              styles.nebulaCloud,
+              {
+                width: orb.size,
+                height: orb.size,
+                borderRadius: orb.size / 2,
+                left: width / 2 + orb.x - orb.size / 2,
+                top: height / 2 + orb.y - orb.size / 2,
+                backgroundColor: color,
+                transform: [
+                  { scale: Animated.add(1, Animated.add(Animated.multiply(bassAnim, 0.3), Animated.multiply(pulseVal, 0.2))) },
+                  { rotate: rot },
+                ],
+                opacity: Animated.add(0.2, Animated.multiply(bassAnim, 0.25)),
+              },
+            ]}
+          />
+        );
+      })}
+      {/* Bright particles */}
+      {Array.from({ length: 24 }).map((_, i) => {
+        const angle = (i / 24) * Math.PI * 2;
+        const dist = 100 + (i % 4) * 50;
+        const color = i % 4 === 0 ? bgColor1 : i % 4 === 1 ? bgColor2 : i % 4 === 2 ? bgColor3 : bgColor1;
+        const waveVal = i % 2 === 0 ? wave1 : wave2;
+
+        return (
+          <Animated.View
+            key={i}
+            style={[
+              styles.nebulaParticle,
+              {
+                left: width / 2 + Math.cos(angle) * dist - 10,
+                top: height / 2 + Math.sin(angle) * dist - 10,
+                backgroundColor: color,
+                transform: [
+                  { scale: Animated.add(1, Animated.multiply(trebleAnim, 1.2)) },
+                  { translateX: Animated.multiply(waveVal, 15) },
+                ],
+                opacity: Animated.add(0.4, Animated.multiply(midAnim, 0.5)),
+              },
+            ]}
+          />
+        );
+      })}
+    </Animated.View>
+  );
+
+  // FRACTAL - Recursive geometry
+  const renderFractal = () => (
+    <Animated.View style={[styles.fullScreen, { backgroundColor }]}>
+      {/* Nested shapes */}
+      {[0, 1, 2, 3, 4, 5, 6, 7].map((i) => {
+        const size = 60 + i * 60;
+        const color = i % 4 === 0 ? bgColor1 : i % 4 === 1 ? bgColor2 : i % 4 === 2 ? bgColor3 : bgColor1;
+        const isCircle = i % 2 === 0;
+
+        return (
+          <Animated.View
+            key={i}
             style={[
               styles.absoluteCenter,
               {
                 width: size,
                 height: size,
                 borderWidth: 3,
-                borderColor: palette[i % palette.length],
-                borderRadius: i % 2 === 0 ? 0 : size / 2,
+                borderColor: color,
+                borderRadius: isCircle ? size / 2 : 0,
                 transform: [
-                  { rotate: `${i * 15}deg` },
-                  { scale: Animated.add(1, Animated.multiply(bassAnim, 0.3)) },
+                  { rotate: `${i * 12}deg` },
+                  { scale: Animated.add(1, Animated.add(Animated.multiply(bassAnim, 0.25), Animated.multiply(breathe1, 0.15))) },
                 ],
-                opacity: Animated.add(0.5, Animated.multiply(midAnim, 0.4)),
+                opacity: Animated.add(0.5, Animated.multiply(midAnim, 0.35)),
               },
             ]}
           />
         );
       })}
-      {/* Rotating inner structure */}
-      <Animated.View
-        style={[
-          styles.absoluteCenter,
-          { transform: [{ rotate: rotationDeg }] },
-        ]}
-      >
-        {Array.from({ length: 4 }).map((_, i) => (
+      {/* Rotating arms */}
+      <Animated.View style={[styles.absoluteCenter, { transform: [{ rotate: rot1Deg }] }]}>
+        {Array.from({ length: 6 }).map((_, i) => (
           <Animated.View
-            key={`arm-${i}`}
+            key={i}
             style={[
               styles.fractalArm,
               {
-                backgroundColor: palette[i % palette.length],
+                backgroundColor: i % 3 === 0 ? bgColor1 : i % 3 === 1 ? bgColor2 : bgColor3,
                 transform: [
-                  { rotate: `${i * 90}deg` },
-                  { translateX: 80 },
-                  { scaleX: Animated.add(1, Animated.multiply(bassAnim, 0.5)) },
+                  { rotate: `${i * 60}deg` },
+                  { translateX: 100 },
+                  { scaleX: Animated.add(1, Animated.multiply(bassAnim, 0.6)) },
                 ],
                 opacity: Animated.add(0.6, Animated.multiply(bassAnim, 0.4)),
               },
@@ -523,72 +638,19 @@ export const CanvasVisualizer: React.FC<CanvasVisualizerProps> = ({ presetId }) 
           />
         ))}
       </Animated.View>
-      {/* Center pulse */}
-      <Animated.View
-        style={[
-          styles.absoluteCenter,
-          styles.fractalCenter,
-          {
-            backgroundColor: palette[0],
-            transform: [{ scale: Animated.add(1, Animated.multiply(bassAnim, 0.8)) }],
-            opacity: Animated.add(0.6, Animated.multiply(bassAnim, 0.4)),
-          },
-        ]}
-      />
-    </View>
-  );
-
-  // VORTEX - Spiral pattern
-  const renderVortex = () => (
-    <View style={styles.fullScreen}>
-      {/* Main vortex arms */}
-      <Animated.View
-        style={[
-          styles.absoluteCenter,
-          styles.vortexOuter,
-          { transform: [{ rotate: rotationDeg }] },
-        ]}
-      >
-        {Array.from({ length: 16 }).map((_, i) => {
-          const length = 60 + (i % 4) * 40;
-          return (
-            <Animated.View
-              key={`arm-${i}`}
-              style={[
-                styles.vortexArm,
-                {
-                  height: length,
-                  backgroundColor: palette[i % palette.length],
-                  transform: [
-                    { rotate: `${i * 22.5}deg` },
-                    { translateY: -length / 2 - 40 },
-                    { scaleY: Animated.add(1, Animated.multiply(bassAnim, 0.6)) },
-                  ],
-                  opacity: Animated.add(0.6, Animated.multiply(bassAnim, 0.3)),
-                },
-              ]}
-            />
-          );
-        })}
-      </Animated.View>
-      {/* Inner counter-rotating */}
-      <Animated.View
-        style={[
-          styles.absoluteCenter,
-          { transform: [{ rotate: rotationDegReverse }] },
-        ]}
-      >
-        {Array.from({ length: 8 }).map((_, i) => (
+      {/* Counter-rotating arms */}
+      <Animated.View style={[styles.absoluteCenter, { transform: [{ rotate: rot2DegRev }] }]}>
+        {Array.from({ length: 4 }).map((_, i) => (
           <Animated.View
-            key={`inner-${i}`}
+            key={i}
             style={[
-              styles.vortexInnerArm,
+              styles.fractalArmInner,
               {
-                backgroundColor: palette[(i + 2) % palette.length],
+                backgroundColor: i % 2 === 0 ? bgColor2 : bgColor3,
                 transform: [
-                  { rotate: `${i * 45}deg` },
-                  { translateY: -50 },
-                  { scaleY: Animated.add(1, Animated.multiply(midAnim, 0.5)) },
+                  { rotate: `${i * 90}deg` },
+                  { translateX: 60 },
+                  { scaleX: Animated.add(1, Animated.multiply(midAnim, 0.5)) },
                 ],
                 opacity: Animated.add(0.7, Animated.multiply(midAnim, 0.3)),
               },
@@ -600,14 +662,101 @@ export const CanvasVisualizer: React.FC<CanvasVisualizerProps> = ({ presetId }) 
       <Animated.View
         style={[
           styles.absoluteCenter,
-          styles.vortexCenter,
+          styles.fractalCenter,
           {
-            backgroundColor: palette[0],
-            transform: [{ scale: Animated.add(1, Animated.multiply(bassAnim, 0.6)) }],
+            backgroundColor: bgColor1,
+            transform: [{ scale: Animated.add(1, Animated.add(Animated.multiply(bassAnim, 0.8), Animated.multiply(pulse1, 0.3))) }],
           },
         ]}
       />
-    </View>
+    </Animated.View>
+  );
+
+  // VORTEX - Spiraling energy
+  const renderVortex = () => (
+    <Animated.View style={[styles.fullScreen, { backgroundColor }]}>
+      {/* Outer spiral */}
+      <Animated.View style={[styles.absoluteCenter, styles.vortexOuter, { transform: [{ rotate: rot1Deg }] }]}>
+        {Array.from({ length: 20 }).map((_, i) => {
+          const length = 50 + (i % 5) * 35;
+          const color = i % 4 === 0 ? bgColor1 : i % 4 === 1 ? bgColor2 : i % 4 === 2 ? bgColor3 : bgColor1;
+
+          return (
+            <Animated.View
+              key={i}
+              style={[
+                styles.vortexArm,
+                {
+                  height: length,
+                  backgroundColor: color,
+                  transform: [
+                    { rotate: `${i * 18}deg` },
+                    { translateY: -length / 2 - 50 },
+                    { scaleY: Animated.add(1, Animated.add(Animated.multiply(bassAnim, 0.7), Animated.multiply(pulse1, 0.2))) },
+                  ],
+                  opacity: Animated.add(0.6, Animated.multiply(bassAnim, 0.3)),
+                },
+              ]}
+            />
+          );
+        })}
+      </Animated.View>
+      {/* Inner counter-spiral */}
+      <Animated.View style={[styles.absoluteCenter, { transform: [{ rotate: rot2DegRev }, { scale: Animated.add(1, Animated.multiply(breathe2, 0.2)) }] }]}>
+        {Array.from({ length: 12 }).map((_, i) => (
+          <Animated.View
+            key={i}
+            style={[
+              styles.vortexInnerArm,
+              {
+                backgroundColor: i % 3 === 0 ? bgColor2 : i % 3 === 1 ? bgColor3 : bgColor1,
+                transform: [
+                  { rotate: `${i * 30}deg` },
+                  { translateY: -60 },
+                  { scaleY: Animated.add(1, Animated.multiply(midAnim, 0.6)) },
+                ],
+                opacity: Animated.add(0.7, Animated.multiply(midAnim, 0.3)),
+              },
+            ]}
+          />
+        ))}
+      </Animated.View>
+      {/* Energy particles */}
+      {Array.from({ length: 8 }).map((_, i) => {
+        const angle = (i / 8) * Math.PI * 2;
+        const dist = 120;
+        return (
+          <Animated.View
+            key={`particle-${i}`}
+            style={[
+              styles.vortexParticle,
+              {
+                left: width / 2 + Math.cos(angle) * dist - 12,
+                top: height / 2 + Math.sin(angle) * dist - 12,
+                backgroundColor: i % 2 === 0 ? bgColor1 : bgColor3,
+                transform: [
+                  { scale: Animated.add(1, Animated.multiply(trebleAnim, 1)) },
+                  { translateX: Animated.multiply(wave1, 25) },
+                  { translateY: Animated.multiply(wave2, 25) },
+                ],
+                opacity: Animated.add(0.5, Animated.multiply(midAnim, 0.5)),
+              },
+            ]}
+          />
+        );
+      })}
+      {/* Center */}
+      <Animated.View
+        style={[
+          styles.absoluteCenter,
+          styles.vortexCenter,
+          {
+            backgroundColor: bgColor1,
+            transform: [{ scale: Animated.add(1, Animated.add(Animated.multiply(bassAnim, 0.7), Animated.multiply(pulse2, 0.3))) }],
+          },
+        ]}
+      />
+    </Animated.View>
   );
 
   const renderVisualization = useCallback(() => {
@@ -622,22 +771,14 @@ export const CanvasVisualizer: React.FC<CanvasVisualizerProps> = ({ presetId }) 
       case 'vortex': return renderVortex();
       default: return renderPlasma();
     }
-  }, [style, bassAnim, midAnim, trebleAnim, rotationDeg, rotationDegReverse, rotationDegSlow, pulse, palette]);
+  }, [style, bassAnim, midAnim, trebleAnim, rot1Deg, rot1DegRev, rot2Deg, rot2DegRev, rot3Deg, pulse1, pulse2, pulse3, bgColor1, bgColor2, bgColor3, wave1, wave2, breathe1, breathe2, backgroundColor]);
 
-  return (
-    <View style={styles.container}>
-      {renderVisualization()}
-    </View>
-  );
+  return renderVisualization();
 };
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#000',
-  },
   fullScreen: {
-    ...StyleSheet.absoluteFillObject,
+    flex: 1,
     overflow: 'hidden',
   },
   absoluteCenter: {
@@ -650,32 +791,32 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   // Plasma
-  cornerGlow: {
-    position: 'absolute',
-    width: 200,
-    height: 200,
-    borderRadius: 100,
+  plasmaCore: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    marginLeft: -40,
+    marginTop: -40,
   },
-  centerGlow: {
-    width: 100,
-    height: 100,
-    borderRadius: 50,
-    marginLeft: -50,
-    marginTop: -50,
+  floatingOrb: {
+    position: 'absolute',
+    width: 80,
+    height: 80,
+    borderRadius: 40,
   },
   // Waveform
   waveBand: {
     position: 'absolute',
-    left: 0,
-    right: 0,
-    height: 30,
-    borderRadius: 15,
+    left: -20,
+    right: -20,
+    height: 40,
+    borderRadius: 20,
   },
   sideBar: {
     position: 'absolute',
     top: 0,
     bottom: 0,
-    width: 20,
+    width: 30,
   },
   // Spectrum
   spectrumBottom: {
@@ -683,7 +824,7 @@ const styles = StyleSheet.create({
     bottom: 0,
     left: 0,
     right: 0,
-    height: height * 0.45,
+    height: height * 0.5,
     flexDirection: 'row',
     alignItems: 'flex-end',
     justifyContent: 'space-evenly',
@@ -693,7 +834,7 @@ const styles = StyleSheet.create({
     top: 0,
     left: 0,
     right: 0,
-    height: height * 0.25,
+    height: height * 0.3,
     flexDirection: 'row',
     alignItems: 'flex-start',
     justifyContent: 'space-evenly',
@@ -705,40 +846,45 @@ const styles = StyleSheet.create({
   },
   // Kaleidoscope
   kaleidoOuter: {
-    width: 400,
-    height: 400,
-    marginLeft: -200,
-    marginTop: -200,
+    width: 450,
+    height: 450,
+    marginLeft: -225,
+    marginTop: -225,
   },
   kaleidoSegment: {
     position: 'absolute',
-    left: 200 - 12,
-    top: 200,
-    width: 24,
-    height: 120,
-    borderRadius: 12,
+    left: 225 - 14,
+    top: 225,
+    width: 28,
+    height: 140,
+    borderRadius: 14,
   },
-  kaleidoInner: {
-    width: 200,
-    height: 200,
-    marginLeft: -100,
-    marginTop: -100,
+  kaleidoMiddle: {
+    width: 280,
+    height: 280,
+    marginLeft: -140,
+    marginTop: -140,
+  },
+  kaleidoMiddleSegment: {
+    position: 'absolute',
+    left: 140 - 12,
+    top: 140,
+    width: 24,
+    height: 90,
+    borderRadius: 12,
   },
   kaleidoInnerSegment: {
     position: 'absolute',
-    left: 100 - 10,
-    top: 100,
-    width: 20,
-    height: 70,
-    borderRadius: 10,
+    width: 18,
+    height: 55,
+    borderRadius: 9,
   },
   kaleidoCenter: {
-    width: 60,
-    height: 60,
-    marginLeft: -30,
-    marginTop: -30,
-    borderWidth: 4,
-    borderRadius: 30,
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    marginLeft: -25,
+    marginTop: -25,
   },
   // Tunnel
   tunnelLine: {
@@ -748,55 +894,73 @@ const styles = StyleSheet.create({
     width: 4,
     height: MAX_DIM,
   },
+  star: {
+    position: 'absolute',
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
   // Nebula
-  nebulaOrb: {
+  nebulaCloud: {
     position: 'absolute',
   },
   nebulaParticle: {
     position: 'absolute',
-    width: 16,
-    height: 16,
-    borderRadius: 8,
+    width: 20,
+    height: 20,
+    borderRadius: 10,
   },
   // Fractal
   fractalArm: {
     position: 'absolute',
-    width: 80,
+    width: 100,
+    height: 20,
+    borderRadius: 10,
+  },
+  fractalArmInner: {
+    position: 'absolute',
+    width: 70,
     height: 16,
     borderRadius: 8,
   },
   fractalCenter: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    marginLeft: -30,
+    marginTop: -30,
+  },
+  // Vortex
+  vortexOuter: {
+    width: 350,
+    height: 350,
+    marginLeft: -175,
+    marginTop: -175,
+  },
+  vortexArm: {
+    position: 'absolute',
+    left: 175 - 10,
+    top: 175,
+    width: 20,
+    borderRadius: 10,
+  },
+  vortexInnerArm: {
+    position: 'absolute',
+    width: 16,
+    height: 80,
+    borderRadius: 8,
+  },
+  vortexParticle: {
+    position: 'absolute',
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+  },
+  vortexCenter: {
     width: 50,
     height: 50,
     borderRadius: 25,
     marginLeft: -25,
     marginTop: -25,
-  },
-  // Vortex
-  vortexOuter: {
-    width: 300,
-    height: 300,
-    marginLeft: -150,
-    marginTop: -150,
-  },
-  vortexArm: {
-    position: 'absolute',
-    left: 150 - 8,
-    top: 150,
-    width: 16,
-    borderRadius: 8,
-  },
-  vortexInnerArm: {
-    position: 'absolute',
-    width: 12,
-    height: 60,
-    borderRadius: 6,
-  },
-  vortexCenter: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    marginLeft: -20,
-    marginTop: -20,
   },
 });
