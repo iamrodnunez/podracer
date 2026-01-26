@@ -16,7 +16,7 @@ interface VisualizerProps {
 export const Visualizer: React.FC<VisualizerProps> = (props) => {
   // Use Canvas visualizer on Android for better compatibility
   if (Platform.OS === 'android') {
-    return <CanvasVisualizer />;
+    return <CanvasVisualizer presetId={props.presetId} />;
   }
 
   // Use GL visualizer on iOS

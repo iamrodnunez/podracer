@@ -33,6 +33,7 @@ export const PodcastDetailScreen: React.FC = () => {
 
   const [refreshing, setRefreshing] = useState(false);
   const [showPlayed, setShowPlayed] = useState(false);
+  const [descriptionExpanded, setDescriptionExpanded] = useState(false);
 
   const podcast = podcasts.find((p) => p.id === podcastId);
   const podcastEpisodes = episodes.get(podcastId) || [];
@@ -244,9 +245,20 @@ export const PodcastDetailScreen: React.FC = () => {
             </View>
 
             {podcast.description && (
-              <Text style={styles.description} numberOfLines={3}>
-                {podcast.description}
-              </Text>
+              <TouchableOpacity
+                onPress={() => setDescriptionExpanded(!descriptionExpanded)}
+                activeOpacity={0.7}
+              >
+                <Text
+                  style={styles.description}
+                  numberOfLines={descriptionExpanded ? undefined : 3}
+                >
+                  {podcast.description}
+                </Text>
+                <Text style={styles.expandText}>
+                  {descriptionExpanded ? 'SHOW LESS' : 'READ MORE'}
+                </Text>
+              </TouchableOpacity>
             )}
 
             <View style={styles.actionButtons}>
@@ -368,6 +380,13 @@ const styles = StyleSheet.create({
     color: '#9CA3AF',
     fontSize: 14,
     lineHeight: 20,
+    marginBottom: 8,
+  },
+  expandText: {
+    color: '#FFFFFF',
+    fontSize: 11,
+    fontWeight: '500',
+    letterSpacing: 1,
     marginBottom: 16,
   },
   actionButtons: {
