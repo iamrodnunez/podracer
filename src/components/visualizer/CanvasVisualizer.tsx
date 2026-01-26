@@ -1,39 +1,55 @@
-import React, { useEffect, useRef } from 'react';
-import { View, StyleSheet, Dimensions, Animated } from 'react-native';
+import React, { useEffect, useRef, useMemo } from 'react';
+import { View, StyleSheet, Dimensions, Animated, Easing } from 'react-native';
 import { useAudioAnalysis } from '../../hooks/useAudioAnalysis';
 import { useSettingsStore } from '../../store/useSettingsStore';
 import { shaderPresets } from '../../shaders/presets';
 
 const { width, height } = Dimensions.get('window');
-const BAR_COUNT = 32;
-const BAR_WIDTH = (width - 40) / BAR_COUNT - 2;
+const CENTER_X = width / 2;
+const CENTER_Y = height / 2;
 
 interface CanvasVisualizerProps {
   presetId?: string;
 }
 
-type VisualizerStyle = 'bars' | 'wave' | 'circles' | 'pulse' | 'radial';
+type VisualizerStyle = 'plasma' | 'waveform' | 'kaleidoscope' | 'tunnel' | 'nebula' | 'spectrum' | 'fractal' | 'vortex';
 
 const getStyleFromPresetId = (presetId?: string): VisualizerStyle => {
-  if (!presetId) return 'bars';
+  if (!presetId) return 'plasma';
 
   const preset = shaderPresets.find(p => p.id === presetId);
-  if (!preset) return 'bars';
+  if (!preset) return 'plasma';
 
-  switch (preset.category) {
-    case 'spectrum':
-      return preset.id === 'circular_spectrum' ? 'radial' : 'bars';
-    case 'waveform':
-      return 'wave';
+  switch (preset.id) {
+    case 'plasma_waves':
+      return 'plasma';
+    case 'waveform_scope':
+      return 'waveform';
+    case 'spectrum_bars':
+      return 'spectrum';
     case 'kaleidoscope':
-    case 'geometric':
-      return 'circles';
-    case 'plasma':
+      return 'kaleidoscope';
     case 'tunnel':
-      return 'pulse';
+      return 'tunnel';
+    case 'geometric_fractal':
+      return 'fractal';
+    case 'electric_nebula':
+      return 'nebula';
+    case 'circular_spectrum':
+      return 'vortex';
     default:
-      return 'bars';
+      return 'plasma';
   }
+};
+
+// Color palettes for different moods
+const colorPalettes = {
+  plasma: ['#ff006e', '#8338ec', '#3a86ff', '#ff006e'],
+  fire: ['#ff4500', '#ff6b35', '#f7c59f', '#ff4500'],
+  ocean: ['#0077b6', '#00b4d8', '#90e0ef', '#0077b6'],
+  neon: ['#f72585', '#7209b7', '#3f37c9', '#4cc9f0'],
+  cosmic: ['#7400b8', '#5e60ce', '#4ea8de', '#56cfe1'],
+  aurora: ['#2d00f7', '#6a00f4', '#8900f2', '#a100f2'],
 };
 
 export const CanvasVisualizer: React.FC<CanvasVisualizerProps> = ({ presetId }) => {
@@ -41,92 +57,155 @@ export const CanvasVisualizer: React.FC<CanvasVisualizerProps> = ({ presetId }) 
   const sensitivity = useSettingsStore((state) => state.visualizer.sensitivity);
   const style = getStyleFromPresetId(presetId);
 
-  // Create animated values for bars
-  const barHeights = useRef(
-    Array.from({ length: BAR_COUNT }, () => new Animated.Value(0))
-  ).current;
+  // Core animation values
+  const time = useRef(new Animated.Value(0)).current;
+  const bassAnim = useRef(new Animated.Value(0)).current;
+  const midAnim = useRef(new Animated.Value(0)).current;
+  const trebleAnim = useRef(new Animated.Value(0)).current;
 
-  // Create animated values for wave points
-  const wavePoints = useRef(
-    Array.from({ length: 20 }, () => new Animated.Value(0))
-  ).current;
-
-  // Create animated values for circles
-  const circleScales = useRef(
-    Array.from({ length: 6 }, () => new Animated.Value(1))
-  ).current;
-
-  // Create animated values for radial segments
-  const radialHeights = useRef(
-    Array.from({ length: 12 }, () => new Animated.Value(50))
-  ).current;
-
-  // Background and general animation values
-  const bgColor = useRef(new Animated.Value(0)).current;
-  const pulseScale = useRef(new Animated.Value(1)).current;
+  // Rotation for kaleidoscope/vortex effects
   const rotation = useRef(new Animated.Value(0)).current;
+  const rotationLoop = useRef<Animated.CompositeAnimation | null>(null);
 
+  // Multiple ring animations for plasma/nebula
+  const rings = useRef(
+    Array.from({ length: 8 }, () => ({
+      scale: new Animated.Value(1),
+      opacity: new Animated.Value(0.5),
+      rotation: new Animated.Value(0),
+    }))
+  ).current;
+
+  // Wave points for waveform
+  const wavePoints = useRef(
+    Array.from({ length: 40 }, () => new Animated.Value(0))
+  ).current;
+
+  // Particles for nebula effect
+  const particles = useRef(
+    Array.from({ length: 30 }, () => ({
+      x: new Animated.Value(Math.random() * width),
+      y: new Animated.Value(Math.random() * height),
+      scale: new Animated.Value(0.5 + Math.random() * 0.5),
+      opacity: new Animated.Value(0.3 + Math.random() * 0.4),
+    }))
+  ).current;
+
+  // Spectrum bars
+  const spectrumBars = useRef(
+    Array.from({ length: 32 }, () => new Animated.Value(10))
+  ).current;
+
+  // Tunnel rings
+  const tunnelRings = useRef(
+    Array.from({ length: 12 }, () => ({
+      scale: new Animated.Value(0.1 + Math.random() * 0.5),
+      opacity: new Animated.Value(0.8),
+    }))
+  ).current;
+
+  // Fractal layers
+  const fractalLayers = useRef(
+    Array.from({ length: 6 }, () => ({
+      scale: new Animated.Value(1),
+      rotation: new Animated.Value(0),
+      opacity: new Animated.Value(0.6),
+    }))
+  ).current;
+
+  // Start continuous rotation animation
+  useEffect(() => {
+    rotationLoop.current = Animated.loop(
+      Animated.timing(rotation, {
+        toValue: 360,
+        duration: 20000,
+        easing: Easing.linear,
+        useNativeDriver: true,
+      })
+    );
+    rotationLoop.current.start();
+
+    // Also animate individual ring rotations
+    rings.forEach((ring, index) => {
+      Animated.loop(
+        Animated.timing(ring.rotation, {
+          toValue: index % 2 === 0 ? 360 : -360,
+          duration: 15000 + index * 2000,
+          easing: Easing.linear,
+          useNativeDriver: true,
+        })
+      ).start();
+    });
+
+    return () => {
+      rotationLoop.current?.stop();
+    };
+  }, []);
+
+  // Respond to audio analysis
   useEffect(() => {
     const { bass, mid, treble } = analysisData;
     const sens = sensitivity;
 
-    // Animate background based on bass
-    Animated.timing(bgColor, {
-      toValue: bass * sens,
-      duration: 100,
-      useNativeDriver: false,
-    }).start();
+    // Smooth audio value animations
+    Animated.parallel([
+      Animated.spring(bassAnim, {
+        toValue: bass * sens,
+        friction: 4,
+        tension: 40,
+        useNativeDriver: false,
+      }),
+      Animated.spring(midAnim, {
+        toValue: mid * sens,
+        friction: 5,
+        tension: 50,
+        useNativeDriver: false,
+      }),
+      Animated.spring(trebleAnim, {
+        toValue: treble * sens,
+        friction: 6,
+        tension: 60,
+        useNativeDriver: false,
+      }),
+    ]).start();
 
-    // Animate pulse scale
-    Animated.spring(pulseScale, {
-      toValue: 1 + bass * sens * 0.3,
-      friction: 3,
-      useNativeDriver: true,
-    }).start();
-
-    // Animate rotation for kaleidoscope-like effects
-    Animated.timing(rotation, {
-      toValue: rotation._value + mid * sens * 0.1,
-      duration: 100,
-      useNativeDriver: true,
-    }).start();
-
-    // Animate bars
-    if (style === 'bars') {
-      const barAnimations = barHeights.map((anim, index) => {
-        const normalizedIndex = index / BAR_COUNT;
-        let targetHeight: number;
-
-        if (normalizedIndex < 0.33) {
-          targetHeight = bass * sens * (1 - normalizedIndex * 2) * height * 0.4;
-        } else if (normalizedIndex < 0.66) {
-          targetHeight = mid * sens * (1 - Math.abs(normalizedIndex - 0.5) * 2) * height * 0.35;
-        } else {
-          targetHeight = treble * sens * (normalizedIndex - 0.5) * height * 0.3;
-        }
-
-        const variation = Math.sin(Date.now() / 200 + index * 0.5) * 10;
-        targetHeight = Math.max(5, targetHeight + variation);
-
-        return Animated.timing(anim, {
-          toValue: targetHeight,
-          duration: 50,
-          useNativeDriver: false,
-        });
-      });
-      Animated.parallel(barAnimations).start();
-    }
+    // Animate rings based on audio
+    const ringAnimations = rings.map((ring, index) => {
+      const intensity = index < 3 ? bass : index < 6 ? mid : treble;
+      const baseScale = 0.5 + index * 0.3;
+      return Animated.parallel([
+        Animated.spring(ring.scale, {
+          toValue: baseScale + intensity * sens * 0.5,
+          friction: 3,
+          tension: 40,
+          useNativeDriver: true,
+        }),
+        Animated.timing(ring.opacity, {
+          toValue: 0.2 + intensity * sens * 0.6,
+          duration: 100,
+          useNativeDriver: true,
+        }),
+      ]);
+    });
+    Animated.parallel(ringAnimations).start();
 
     // Animate wave points
-    if (style === 'wave') {
-      const waveAnimations = wavePoints.map((anim, index) => {
+    if (style === 'waveform') {
+      const waveAnimations = wavePoints.map((point, index) => {
         const normalizedIndex = index / wavePoints.length;
-        const waveValue = Math.sin(Date.now() / 100 + index * 0.8) * bass * sens * 50;
-        const midWave = Math.sin(Date.now() / 150 + index * 0.5) * mid * sens * 30;
-        const trebleWave = Math.sin(Date.now() / 80 + index * 1.2) * treble * sens * 20;
+        const phase = Date.now() / 200 + index * 0.3;
 
-        return Animated.timing(anim, {
-          toValue: waveValue + midWave + trebleWave,
+        let amplitude = 0;
+        if (normalizedIndex < 0.33) {
+          amplitude = Math.sin(phase) * bass * sens * 80;
+        } else if (normalizedIndex < 0.66) {
+          amplitude = Math.sin(phase * 1.5) * mid * sens * 60;
+        } else {
+          amplitude = Math.sin(phase * 2) * treble * sens * 40;
+        }
+
+        return Animated.timing(point, {
+          toValue: amplitude,
           duration: 50,
           useNativeDriver: false,
         });
@@ -134,288 +213,564 @@ export const CanvasVisualizer: React.FC<CanvasVisualizerProps> = ({ presetId }) 
       Animated.parallel(waveAnimations).start();
     }
 
-    // Animate circles
-    if (style === 'circles') {
-      const circleAnimations = circleScales.map((anim, index) => {
-        let targetScale = 1;
-        if (index < 2) targetScale = 1 + bass * sens * 0.5;
-        else if (index < 4) targetScale = 1 + mid * sens * 0.4;
-        else targetScale = 1 + treble * sens * 0.3;
-
-        return Animated.spring(anim, {
-          toValue: targetScale,
-          friction: 4,
-          useNativeDriver: true,
-        });
-      });
-      Animated.parallel(circleAnimations).start();
-    }
-
-    // Animate radial segments
-    if (style === 'radial') {
-      const radialAnimations = radialHeights.map((anim, index) => {
-        const segment = index / radialHeights.length;
+    // Animate spectrum bars
+    if (style === 'spectrum') {
+      const barAnimations = spectrumBars.map((bar, index) => {
+        const normalizedIndex = index / spectrumBars.length;
         let targetHeight: number;
 
-        if (segment < 0.33) {
-          targetHeight = 50 + bass * sens * 100;
-        } else if (segment < 0.66) {
-          targetHeight = 50 + mid * sens * 80;
+        if (normalizedIndex < 0.33) {
+          targetHeight = 20 + bass * sens * (1 - normalizedIndex * 2) * height * 0.5;
+        } else if (normalizedIndex < 0.66) {
+          targetHeight = 20 + mid * sens * (1 - Math.abs(normalizedIndex - 0.5) * 2) * height * 0.4;
         } else {
-          targetHeight = 50 + treble * sens * 60;
+          targetHeight = 20 + treble * sens * (normalizedIndex - 0.5) * height * 0.35;
         }
 
-        const variation = Math.sin(Date.now() / 150 + index * 0.7) * 15;
-        targetHeight = Math.max(20, targetHeight + variation);
+        const variation = Math.sin(Date.now() / 150 + index * 0.4) * 15;
+        targetHeight = Math.max(10, targetHeight + variation);
 
-        return Animated.timing(anim, {
+        return Animated.timing(bar, {
           toValue: targetHeight,
-          duration: 80,
+          duration: 60,
           useNativeDriver: false,
         });
       });
-      Animated.parallel(radialAnimations).start();
+      Animated.parallel(barAnimations).start();
     }
-  }, [analysisData, sensitivity, style, barHeights, wavePoints, circleScales, radialHeights, bgColor, pulseScale, rotation]);
 
-  const backgroundColor = bgColor.interpolate({
-    inputRange: [0, 1],
-    outputRange: ['#000000', '#1a0a2e'],
+    // Animate tunnel rings
+    if (style === 'tunnel') {
+      const tunnelAnimations = tunnelRings.map((ring, index) => {
+        const speed = 1 + bass * sens * 2;
+        const newScale = ((ring.scale as any)._value * speed) % 3;
+
+        return Animated.parallel([
+          Animated.timing(ring.scale, {
+            toValue: 0.1 + (newScale || Math.random() * 0.5),
+            duration: 100,
+            useNativeDriver: true,
+          }),
+          Animated.timing(ring.opacity, {
+            toValue: Math.max(0, 1 - newScale / 3),
+            duration: 100,
+            useNativeDriver: true,
+          }),
+        ]);
+      });
+      Animated.parallel(tunnelAnimations).start();
+    }
+
+    // Animate fractal layers
+    if (style === 'fractal') {
+      const fractalAnimations = fractalLayers.map((layer, index) => {
+        const intensity = index < 2 ? bass : index < 4 ? mid : treble;
+        return Animated.parallel([
+          Animated.spring(layer.scale, {
+            toValue: 1 + intensity * sens * 0.3 * (index + 1),
+            friction: 4,
+            useNativeDriver: true,
+          }),
+          Animated.timing(layer.opacity, {
+            toValue: 0.3 + intensity * sens * 0.5,
+            duration: 100,
+            useNativeDriver: true,
+          }),
+        ]);
+      });
+      Animated.parallel(fractalAnimations).start();
+    }
+
+    // Animate particles
+    if (style === 'nebula') {
+      particles.forEach((particle, index) => {
+        const intensity = index % 3 === 0 ? bass : index % 3 === 1 ? mid : treble;
+        Animated.parallel([
+          Animated.spring(particle.scale, {
+            toValue: 0.5 + intensity * sens * 1.5,
+            friction: 5,
+            useNativeDriver: true,
+          }),
+          Animated.timing(particle.opacity, {
+            toValue: 0.2 + intensity * sens * 0.6,
+            duration: 150,
+            useNativeDriver: true,
+          }),
+        ]).start();
+      });
+    }
+
+  }, [analysisData, sensitivity, style]);
+
+  // Get color palette based on style
+  const palette = useMemo(() => {
+    switch (style) {
+      case 'plasma': return colorPalettes.plasma;
+      case 'waveform': return colorPalettes.neon;
+      case 'spectrum': return colorPalettes.fire;
+      case 'kaleidoscope': return colorPalettes.cosmic;
+      case 'tunnel': return colorPalettes.aurora;
+      case 'nebula': return colorPalettes.cosmic;
+      case 'fractal': return colorPalettes.neon;
+      case 'vortex': return colorPalettes.ocean;
+      default: return colorPalettes.plasma;
+    }
+  }, [style]);
+
+  // Background color animation
+  const backgroundColor = bassAnim.interpolate({
+    inputRange: [0, 0.5, 1],
+    outputRange: ['#000000', '#0a0015', '#150025'],
   });
 
-  // Render Bars style
-  const renderBars = () => (
-    <View style={styles.barsContainer}>
-      {barHeights.map((animHeight, index) => {
-        const normalizedIndex = index / BAR_COUNT;
-        let barColor: string;
-
-        if (normalizedIndex < 0.33) {
-          barColor = '#ff4757';
-        } else if (normalizedIndex < 0.66) {
-          barColor = '#2ed573';
-        } else {
-          barColor = '#1e90ff';
-        }
+  // Render Plasma style - flowing rings and gradients
+  const renderPlasma = () => (
+    <View style={styles.centered}>
+      {rings.map((ring, index) => {
+        const size = 80 + index * 60;
+        const colorIndex = index % palette.length;
 
         return (
           <Animated.View
-            key={index}
+            key={`plasma-${index}`}
             style={[
-              styles.bar,
-              {
-                height: animHeight,
-                backgroundColor: barColor,
-                width: BAR_WIDTH,
-              },
-            ]}
-          />
-        );
-      })}
-    </View>
-  );
-
-  // Render Wave style
-  const renderWave = () => (
-    <View style={styles.waveContainer}>
-      <View style={styles.waveLine}>
-        {wavePoints.map((animY, index) => (
-          <Animated.View
-            key={index}
-            style={[
-              styles.wavePoint,
-              {
-                transform: [{ translateY: animY }],
-                backgroundColor: index % 2 === 0 ? '#2ed573' : '#1e90ff',
-              },
-            ]}
-          />
-        ))}
-      </View>
-      <View style={[styles.waveLine, { top: height * 0.35 }]}>
-        {wavePoints.map((animY, index) => (
-          <Animated.View
-            key={`mid-${index}`}
-            style={[
-              styles.wavePoint,
-              {
-                transform: [{
-                  translateY: Animated.multiply(animY, -0.7)
-                }],
-                backgroundColor: '#ff4757',
-                opacity: 0.6,
-              },
-            ]}
-          />
-        ))}
-      </View>
-    </View>
-  );
-
-  // Render Circles style (kaleidoscope/geometric)
-  const renderCircles = () => (
-    <View style={styles.circlesContainer}>
-      {circleScales.map((animScale, index) => {
-        const size = 60 + index * 40;
-        const colors = ['#ff4757', '#2ed573', '#1e90ff', '#ffa502', '#a55eea', '#ff6b81'];
-
-        return (
-          <Animated.View
-            key={index}
-            style={[
-              styles.circle,
+              styles.plasmaRing,
               {
                 width: size,
                 height: size,
                 borderRadius: size / 2,
-                borderColor: colors[index % colors.length],
+                borderColor: palette[colorIndex],
+                borderWidth: 2 + (rings.length - index) * 0.5,
+                opacity: ring.opacity,
                 transform: [
-                  { scale: animScale },
-                  { rotate: `${index * 15}deg` },
+                  { scale: ring.scale },
+                  {
+                    rotate: ring.rotation.interpolate({
+                      inputRange: [0, 360],
+                      outputRange: ['0deg', '360deg'],
+                    }),
+                  },
                 ],
-                opacity: 0.7 - index * 0.08,
               },
             ]}
           />
         );
       })}
+      {/* Central glow */}
       <Animated.View
         style={[
-          styles.centerPulse,
+          styles.centralGlow,
           {
-            transform: [{ scale: pulseScale }],
+            backgroundColor: palette[0],
+            transform: [{ scale: Animated.add(1, Animated.multiply(bassAnim, 0.5)) }],
+            opacity: Animated.add(0.3, Animated.multiply(bassAnim, 0.4)),
           },
         ]}
       />
     </View>
   );
 
-  // Render Pulse style (plasma/tunnel)
-  const renderPulse = () => (
-    <View style={styles.pulseContainer}>
-      {[0, 1, 2, 3].map((index) => (
+  // Render Waveform style - oscilloscope with glow
+  const renderWaveform = () => (
+    <View style={styles.waveformContainer}>
+      {/* Multiple wave layers for depth */}
+      {[0, 1, 2].map((layerIndex) => (
+        <View key={`wave-layer-${layerIndex}`} style={[styles.waveLine, { top: height * (0.4 + layerIndex * 0.1) }]}>
+          {wavePoints.map((point, index) => (
+            <Animated.View
+              key={`wave-${layerIndex}-${index}`}
+              style={[
+                styles.wavePoint,
+                {
+                  backgroundColor: palette[layerIndex % palette.length],
+                  transform: [
+                    { translateY: Animated.multiply(point, 1 - layerIndex * 0.2) },
+                    { scale: Animated.add(0.8, Animated.multiply(bassAnim, 0.4)) },
+                  ],
+                  opacity: 0.8 - layerIndex * 0.2,
+                  width: 6 - layerIndex,
+                  height: 6 - layerIndex,
+                  borderRadius: 3,
+                },
+              ]}
+            />
+          ))}
+        </View>
+      ))}
+      {/* Glow line */}
+      <Animated.View
+        style={[
+          styles.waveGlow,
+          {
+            opacity: Animated.add(0.1, Animated.multiply(midAnim, 0.3)),
+            backgroundColor: palette[1],
+          },
+        ]}
+      />
+    </View>
+  );
+
+  // Render Spectrum style - bars with reflection
+  const renderSpectrum = () => {
+    const barWidth = (width - 60) / spectrumBars.length - 2;
+
+    return (
+      <View style={styles.spectrumContainer}>
+        {/* Main bars */}
+        <View style={styles.spectrumBars}>
+          {spectrumBars.map((barHeight, index) => {
+            const normalizedIndex = index / spectrumBars.length;
+            const colorIndex = Math.floor(normalizedIndex * (palette.length - 1));
+
+            return (
+              <Animated.View
+                key={`bar-${index}`}
+                style={[
+                  styles.spectrumBar,
+                  {
+                    width: barWidth,
+                    height: barHeight,
+                    backgroundColor: palette[colorIndex],
+                    shadowColor: palette[colorIndex],
+                    shadowOffset: { width: 0, height: 0 },
+                    shadowOpacity: 0.8,
+                    shadowRadius: 8,
+                  },
+                ]}
+              />
+            );
+          })}
+        </View>
+        {/* Reflection */}
+        <View style={[styles.spectrumBars, styles.spectrumReflection]}>
+          {spectrumBars.map((barHeight, index) => {
+            const normalizedIndex = index / spectrumBars.length;
+            const colorIndex = Math.floor(normalizedIndex * (palette.length - 1));
+
+            return (
+              <Animated.View
+                key={`reflection-${index}`}
+                style={[
+                  styles.spectrumBar,
+                  {
+                    width: barWidth,
+                    height: Animated.multiply(barHeight, 0.4),
+                    backgroundColor: palette[colorIndex],
+                    opacity: 0.3,
+                  },
+                ]}
+              />
+            );
+          })}
+        </View>
+      </View>
+    );
+  };
+
+  // Render Kaleidoscope style - rotating symmetric patterns
+  const renderKaleidoscope = () => {
+    const segments = 12;
+
+    return (
+      <View style={styles.centered}>
         <Animated.View
-          key={index}
           style={[
-            styles.pulseRing,
+            styles.kaleidoscopeContainer,
             {
-              width: 100 + index * 80,
-              height: 100 + index * 80,
-              borderRadius: (100 + index * 80) / 2,
               transform: [
-                { scale: pulseScale },
+                {
+                  rotate: rotation.interpolate({
+                    inputRange: [0, 360],
+                    outputRange: ['0deg', '360deg'],
+                  }),
+                },
               ],
-              opacity: bgColor.interpolate({
-                inputRange: [0, 1],
-                outputRange: [0.2 - index * 0.04, 0.6 - index * 0.1],
-              }),
-              borderColor: index % 2 === 0 ? '#a55eea' : '#1e90ff',
             },
           ]}
-        />
-      ))}
-      <Animated.View
-        style={[
-          styles.pulseCore,
-          {
-            transform: [{ scale: pulseScale }],
-            backgroundColor: bgColor.interpolate({
-              inputRange: [0, 1],
-              outputRange: ['#2a1a4a', '#5a2a8a'],
-            }),
-          },
-        ]}
-      />
-    </View>
-  );
+        >
+          {Array.from({ length: segments }).map((_, index) => {
+            const angle = (index / segments) * 360;
+            const ringIndex = index % rings.length;
 
-  // Render Radial style (circular spectrum)
-  const renderRadial = () => (
-    <View style={styles.radialContainer}>
-      {radialHeights.map((animHeight, index) => {
-        const angle = (index / radialHeights.length) * 360;
-        const colors = ['#ff4757', '#ff4757', '#ff4757', '#ff4757',
-                        '#2ed573', '#2ed573', '#2ed573', '#2ed573',
-                        '#1e90ff', '#1e90ff', '#1e90ff', '#1e90ff'];
+            return (
+              <Animated.View
+                key={`kaleido-${index}`}
+                style={[
+                  styles.kaleidoscopeSegment,
+                  {
+                    transform: [
+                      { rotate: `${angle}deg` },
+                      { translateY: -80 },
+                      { scale: rings[ringIndex].scale },
+                    ],
+                    opacity: rings[ringIndex].opacity,
+                    backgroundColor: palette[index % palette.length],
+                  },
+                ]}
+              />
+            );
+          })}
+        </Animated.View>
+        {/* Inner rotating elements */}
+        {[0, 1, 2].map((layerIndex) => (
+          <Animated.View
+            key={`inner-${layerIndex}`}
+            style={[
+              styles.kaleidoscopeInner,
+              {
+                width: 60 + layerIndex * 40,
+                height: 60 + layerIndex * 40,
+                borderRadius: 30 + layerIndex * 20,
+                borderColor: palette[layerIndex],
+                transform: [
+                  { scale: rings[layerIndex].scale },
+                  {
+                    rotate: rings[layerIndex].rotation.interpolate({
+                      inputRange: [0, 360],
+                      outputRange: layerIndex % 2 === 0 ? ['0deg', '360deg'] : ['360deg', '0deg'],
+                    }),
+                  },
+                ],
+                opacity: rings[layerIndex].opacity,
+              },
+            ]}
+          />
+        ))}
+      </View>
+    );
+  };
+
+  // Render Tunnel style - warp speed effect
+  const renderTunnel = () => (
+    <View style={styles.centered}>
+      {tunnelRings.map((ring, index) => {
+        const maxSize = Math.min(width, height) * 1.5;
 
         return (
           <Animated.View
-            key={index}
+            key={`tunnel-${index}`}
             style={[
-              styles.radialBar,
+              styles.tunnelRing,
               {
-                height: animHeight,
-                backgroundColor: colors[index],
-                transform: [
-                  { rotate: `${angle}deg` },
-                  { translateY: -60 },
-                ],
+                width: ring.scale.interpolate({
+                  inputRange: [0, 3],
+                  outputRange: [50, maxSize],
+                }),
+                height: ring.scale.interpolate({
+                  inputRange: [0, 3],
+                  outputRange: [50, maxSize],
+                }),
+                borderRadius: ring.scale.interpolate({
+                  inputRange: [0, 3],
+                  outputRange: [25, maxSize / 2],
+                }),
+                borderColor: palette[index % palette.length],
+                opacity: ring.opacity,
+                borderWidth: ring.scale.interpolate({
+                  inputRange: [0, 3],
+                  outputRange: [4, 1],
+                }),
               },
             ]}
           />
         );
       })}
-      <View style={styles.radialCenter} />
-    </View>
-  );
-
-  // Floating particles (shown on all styles)
-  const renderParticles = () => (
-    <View style={styles.particlesContainer}>
-      {Array.from({ length: 15 }).map((_, index) => (
+      {/* Stars */}
+      {particles.slice(0, 15).map((particle, index) => (
         <Animated.View
-          key={index}
+          key={`star-${index}`}
           style={[
-            styles.particle,
+            styles.star,
             {
-              left: `${(index * 7) % 100}%`,
-              bottom: `${(index * 11) % 60 + 20}%`,
-              opacity: bgColor.interpolate({
-                inputRange: [0, 1],
-                outputRange: [0.1, 0.5],
-              }),
-              transform: [
-                {
-                  translateY: bgColor.interpolate({
-                    inputRange: [0, 1],
-                    outputRange: [0, -15 - (index % 5) * 8],
-                  }),
-                },
-                {
-                  scale: bgColor.interpolate({
-                    inputRange: [0, 1],
-                    outputRange: [0.5, 1 + (index % 3) * 0.2],
-                  }),
-                },
-              ],
+              left: particle.x,
+              top: particle.y,
+              opacity: Animated.multiply(particle.opacity, trebleAnim),
+              transform: [{ scale: particle.scale }],
             },
           ]}
         />
       ))}
+    </View>
+  );
+
+  // Render Nebula style - cosmic particles
+  const renderNebula = () => (
+    <View style={StyleSheet.absoluteFill}>
+      {/* Background glow layers */}
+      {[0, 1, 2].map((index) => (
+        <Animated.View
+          key={`nebula-bg-${index}`}
+          style={[
+            styles.nebulaGlow,
+            {
+              backgroundColor: palette[index],
+              left: CENTER_X - 150 + index * 50,
+              top: CENTER_Y - 150 + index * 30,
+              transform: [
+                { scale: rings[index].scale },
+                {
+                  rotate: rings[index].rotation.interpolate({
+                    inputRange: [0, 360],
+                    outputRange: ['0deg', '360deg'],
+                  }),
+                },
+              ],
+              opacity: Animated.multiply(rings[index].opacity, 0.4),
+            },
+          ]}
+        />
+      ))}
+      {/* Particles */}
+      {particles.map((particle, index) => (
+        <Animated.View
+          key={`particle-${index}`}
+          style={[
+            styles.nebulaParticle,
+            {
+              left: particle.x,
+              top: particle.y,
+              backgroundColor: palette[index % palette.length],
+              transform: [{ scale: particle.scale }],
+              opacity: particle.opacity,
+              shadowColor: palette[index % palette.length],
+              shadowOffset: { width: 0, height: 0 },
+              shadowOpacity: 1,
+              shadowRadius: 10,
+            },
+          ]}
+        />
+      ))}
+    </View>
+  );
+
+  // Render Fractal style - recursive geometric patterns
+  const renderFractal = () => (
+    <View style={styles.centered}>
+      {fractalLayers.map((layer, index) => {
+        const size = 40 + index * 50;
+        const sides = 3 + index; // Triangle, square, pentagon, etc.
+
+        return (
+          <Animated.View
+            key={`fractal-${index}`}
+            style={[
+              styles.fractalLayer,
+              {
+                width: size,
+                height: size,
+                borderColor: palette[index % palette.length],
+                borderWidth: 2,
+                transform: [
+                  { scale: layer.scale },
+                  {
+                    rotate: layer.rotation.interpolate({
+                      inputRange: [0, 360],
+                      outputRange: [`${index * 15}deg`, `${360 + index * 15}deg`],
+                    }),
+                  },
+                ],
+                opacity: layer.opacity,
+                borderRadius: sides > 5 ? size / 2 : 0,
+              },
+            ]}
+          />
+        );
+      })}
+      {/* Center pulse */}
+      <Animated.View
+        style={[
+          styles.fractalCenter,
+          {
+            backgroundColor: palette[0],
+            transform: [
+              { scale: Animated.add(1, Animated.multiply(bassAnim, 0.8)) },
+            ],
+            opacity: Animated.add(0.5, Animated.multiply(bassAnim, 0.5)),
+          },
+        ]}
+      />
+    </View>
+  );
+
+  // Render Vortex style - spiral effect
+  const renderVortex = () => (
+    <View style={styles.centered}>
+      <Animated.View
+        style={[
+          styles.vortexContainer,
+          {
+            transform: [
+              {
+                rotate: rotation.interpolate({
+                  inputRange: [0, 360],
+                  outputRange: ['0deg', '-360deg'],
+                }),
+              },
+            ],
+          },
+        ]}
+      >
+        {Array.from({ length: 24 }).map((_, index) => {
+          const angle = (index / 24) * 360;
+          const distance = 30 + (index % 8) * 20;
+          const ringIndex = index % rings.length;
+
+          return (
+            <Animated.View
+              key={`vortex-${index}`}
+              style={[
+                styles.vortexArm,
+                {
+                  width: 8,
+                  height: distance,
+                  backgroundColor: palette[index % palette.length],
+                  transform: [
+                    { rotate: `${angle}deg` },
+                    { translateY: -distance / 2 },
+                    { scaleY: rings[ringIndex].scale },
+                  ],
+                  opacity: rings[ringIndex].opacity,
+                  borderRadius: 4,
+                },
+              ]}
+            />
+          );
+        })}
+      </Animated.View>
+      {/* Central glow */}
+      <Animated.View
+        style={[
+          styles.vortexCenter,
+          {
+            backgroundColor: palette[0],
+            transform: [{ scale: Animated.add(1, Animated.multiply(bassAnim, 0.6)) }],
+            shadowColor: palette[0],
+            shadowOffset: { width: 0, height: 0 },
+            shadowOpacity: 1,
+            shadowRadius: 30,
+          },
+        ]}
+      />
     </View>
   );
 
   const renderVisualization = () => {
     switch (style) {
-      case 'bars':
-        return renderBars();
-      case 'wave':
-        return renderWave();
-      case 'circles':
-        return renderCircles();
-      case 'pulse':
-        return renderPulse();
-      case 'radial':
-        return renderRadial();
-      default:
-        return renderBars();
+      case 'plasma': return renderPlasma();
+      case 'waveform': return renderWaveform();
+      case 'spectrum': return renderSpectrum();
+      case 'kaleidoscope': return renderKaleidoscope();
+      case 'tunnel': return renderTunnel();
+      case 'nebula': return renderNebula();
+      case 'fractal': return renderFractal();
+      case 'vortex': return renderVortex();
+      default: return renderPlasma();
     }
   };
 
   return (
     <Animated.View style={[styles.container, { backgroundColor }]}>
       {renderVisualization()}
-      {renderParticles()}
     </Animated.View>
   );
 };
@@ -423,31 +778,28 @@ export const CanvasVisualizer: React.FC<CanvasVisualizerProps> = ({ presetId }) 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    overflow: 'hidden',
+  },
+  centered: {
+    ...StyleSheet.absoluteFillObject,
     justifyContent: 'center',
     alignItems: 'center',
   },
-  // Bars styles
-  barsContainer: {
+  // Plasma styles
+  plasmaRing: {
     position: 'absolute',
-    bottom: 100,
-    left: 20,
-    right: 20,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-end',
-    height: height * 0.4,
   },
-  bar: {
-    borderRadius: 2,
+  centralGlow: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
   },
-  // Wave styles
-  waveContainer: {
+  // Waveform styles
+  waveformContainer: {
     ...StyleSheet.absoluteFillObject,
-    justifyContent: 'center',
   },
   waveLine: {
     position: 'absolute',
-    top: height * 0.45,
     left: 20,
     right: 20,
     flexDirection: 'row',
@@ -455,78 +807,105 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   wavePoint: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-  },
-  // Circles styles
-  circlesContainer: {
-    position: 'absolute',
-    width: 300,
-    height: 300,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  circle: {
-    position: 'absolute',
-    borderWidth: 3,
-  },
-  centerPulse: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: '#fff',
-    opacity: 0.8,
-  },
-  // Pulse styles
-  pulseContainer: {
-    position: 'absolute',
-    width: 400,
-    height: 400,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  pulseRing: {
-    position: 'absolute',
-    borderWidth: 2,
-  },
-  pulseCore: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-  },
-  // Radial styles
-  radialContainer: {
-    position: 'absolute',
-    width: 300,
-    height: 300,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  radialBar: {
-    position: 'absolute',
-    width: 8,
-    borderRadius: 4,
-    transformOrigin: 'bottom center',
-  },
-  radialCenter: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    backgroundColor: '#1a1a2e',
-    borderWidth: 2,
-    borderColor: '#fff',
-  },
-  // Particles
-  particlesContainer: {
-    ...StyleSheet.absoluteFillObject,
-    overflow: 'hidden',
-  },
-  particle: {
-    position: 'absolute',
     width: 6,
     height: 6,
     borderRadius: 3,
+  },
+  waveGlow: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    top: height * 0.48,
+    height: 4,
+  },
+  // Spectrum styles
+  spectrumContainer: {
+    ...StyleSheet.absoluteFillObject,
+    justifyContent: 'center',
+  },
+  spectrumBars: {
+    position: 'absolute',
+    bottom: height * 0.3,
+    left: 30,
+    right: 30,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-end',
+  },
+  spectrumReflection: {
+    bottom: undefined,
+    top: height * 0.7,
+    transform: [{ scaleY: -1 }],
+    opacity: 0.3,
+  },
+  spectrumBar: {
+    borderRadius: 2,
+  },
+  // Kaleidoscope styles
+  kaleidoscopeContainer: {
+    width: 300,
+    height: 300,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  kaleidoscopeSegment: {
+    position: 'absolute',
+    width: 20,
+    height: 60,
+    borderRadius: 10,
+  },
+  kaleidoscopeInner: {
+    position: 'absolute',
+    borderWidth: 3,
+  },
+  // Tunnel styles
+  tunnelRing: {
+    position: 'absolute',
+    borderWidth: 2,
+  },
+  star: {
+    position: 'absolute',
+    width: 4,
+    height: 4,
+    borderRadius: 2,
     backgroundColor: '#fff',
+  },
+  // Nebula styles
+  nebulaGlow: {
+    position: 'absolute',
+    width: 300,
+    height: 300,
+    borderRadius: 150,
+  },
+  nebulaParticle: {
+    position: 'absolute',
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+  },
+  // Fractal styles
+  fractalLayer: {
+    position: 'absolute',
+  },
+  fractalCenter: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+  },
+  // Vortex styles
+  vortexContainer: {
+    width: 300,
+    height: 300,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  vortexArm: {
+    position: 'absolute',
+  },
+  vortexCenter: {
+    position: 'absolute',
+    width: 40,
+    height: 40,
+    borderRadius: 20,
   },
 });
