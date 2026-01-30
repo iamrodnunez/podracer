@@ -4,7 +4,8 @@ import * as storageService from './storageService';
 import { usePodcastStore } from '../store/usePodcastStore';
 
 const DOWNLOAD_DIRECTORY = `${FileSystem.documentDirectory}podcasts/`;
-const USER_AGENT = 'Podracer/1.0';
+// User-Agent for podcast analytics - identifies as Podracer to download services
+const USER_AGENT = 'Podracer/1.0 (Podcast Player; https://podracer.app)';
 
 interface DownloadProgress {
   episodeId: string;

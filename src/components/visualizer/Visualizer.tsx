@@ -1,7 +1,5 @@
 import React from 'react';
-import { Platform } from 'react-native';
 import { GLVisualizer } from './GLVisualizer';
-import { CanvasVisualizer } from './CanvasVisualizer';
 import { ShaderPreset } from '../../types/visualization';
 
 interface VisualizerProps {
@@ -10,15 +8,9 @@ interface VisualizerProps {
 }
 
 /**
- * Platform-aware Visualizer component
- * Uses WebGL shaders on iOS, Canvas-based animation on Android
+ * Visualizer component using WebGL shaders on both platforms
+ * expo-gl works on both iOS and Android with proper shader precision
  */
 export const Visualizer: React.FC<VisualizerProps> = (props) => {
-  // Use Canvas visualizer on Android for better compatibility
-  if (Platform.OS === 'android') {
-    return <CanvasVisualizer presetId={props.presetId} />;
-  }
-
-  // Use GL visualizer on iOS
   return <GLVisualizer {...props} />;
 };

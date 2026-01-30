@@ -218,9 +218,19 @@ const onPlaybackStatusUpdate = async (status: any) => {
 };
 
 export const play = async (): Promise<void> => {
+  const { currentEpisode } = usePlayerStore.getState();
+
+  // If sound exists, just resume
   if (sound) {
     await sound.playAsync();
     usePlayerStore.getState().setIsPlaying(true);
+    startPositionSaveInterval();
+    return;
+  }
+
+  // If no sound but we have an episode (restored state), load and play it
+  if (currentEpisode) {
+    await playEpisode(currentEpisode);
   }
 };
 
