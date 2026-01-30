@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useCallback } from 'react';
+import React, { useEffect, useRef, useCallback, useState } from 'react';
 import { View, StyleSheet, Dimensions, Animated, Easing } from 'react-native';
 import { useAudioAnalysis } from '../../hooks/useAudioAnalysis';
 import { useSettingsStore } from '../../store/useSettingsStore';
@@ -12,6 +12,18 @@ interface CanvasVisualizerProps {
 }
 
 type VisualizerStyle = 'plasma' | 'waveform' | 'spectrum' | 'kaleidoscope' | 'tunnel' | 'nebula' | 'fractal' | 'vortex';
+
+// Psychedelic color palettes - cycle through these
+const COLOR_PALETTES = [
+  ['#ff0080', '#8000ff', '#0080ff'],  // Pink-purple-blue
+  ['#8000ff', '#0080ff', '#00ff80'],  // Purple-blue-green
+  ['#0080ff', '#00ff80', '#ffff00'],  // Blue-green-yellow
+  ['#00ff80', '#ffff00', '#ff8000'],  // Green-yellow-orange
+  ['#ffff00', '#ff8000', '#ff0080'],  // Yellow-orange-pink
+  ['#ff8000', '#ff0080', '#8000ff'],  // Orange-pink-purple
+];
+
+const BG_COLORS = ['#000008', '#080010', '#100008', '#080008', '#000810', '#100010'];
 
 const getStyleFromPresetId = (presetId?: string): VisualizerStyle => {
   if (!presetId) return 'plasma';
@@ -36,7 +48,20 @@ export const CanvasVisualizer: React.FC<CanvasVisualizerProps> = ({ presetId }) 
   const sensitivity = useSettingsStore((state) => state.visualizer.sensitivity);
   const style = getStyleFromPresetId(presetId);
 
-  // Audio reactive values
+  // Color palette cycling with state (not animated)
+  const [colorIndex, setColorIndex] = useState(0);
+  const colors = COLOR_PALETTES[colorIndex % COLOR_PALETTES.length];
+  const bgColor = BG_COLORS[colorIndex % BG_COLORS.length];
+
+  // Cycle colors every 3 seconds
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setColorIndex(prev => (prev + 1) % COLOR_PALETTES.length);
+    }, 3000);
+    return () => clearInterval(interval);
+  }, []);
+
+  // Audio reactive values - all using native driver
   const bassAnim = useRef(new Animated.Value(0)).current;
   const midAnim = useRef(new Animated.Value(0)).current;
   const trebleAnim = useRef(new Animated.Value(0)).current;
@@ -51,10 +76,6 @@ export const CanvasVisualizer: React.FC<CanvasVisualizerProps> = ({ presetId }) 
   const pulse2 = useRef(new Animated.Value(0)).current;
   const pulse3 = useRef(new Animated.Value(0)).current;
 
-  // Color shift animations
-  const colorShift1 = useRef(new Animated.Value(0)).current;
-  const colorShift2 = useRef(new Animated.Value(0)).current;
-
   // Wave animations
   const wave1 = useRef(new Animated.Value(0)).current;
   const wave2 = useRef(new Animated.Value(0)).current;
@@ -63,7 +84,7 @@ export const CanvasVisualizer: React.FC<CanvasVisualizerProps> = ({ presetId }) 
   const breathe1 = useRef(new Animated.Value(0)).current;
   const breathe2 = useRef(new Animated.Value(0)).current;
 
-  // Start all continuous animations
+  // Start all continuous animations - ALL native driver now
   useEffect(() => {
     // Rotations at different speeds
     const rot1 = Animated.loop(
@@ -94,14 +115,6 @@ export const CanvasVisualizer: React.FC<CanvasVisualizerProps> = ({ presetId }) 
         Animated.timing(pulse3, { toValue: 1, duration: 3000, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
         Animated.timing(pulse3, { toValue: 0, duration: 3000, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
       ])
-    );
-
-    // Color cycling
-    const c1 = Animated.loop(
-      Animated.timing(colorShift1, { toValue: 1, duration: 5000, easing: Easing.linear, useNativeDriver: false })
-    );
-    const c2 = Animated.loop(
-      Animated.timing(colorShift2, { toValue: 1, duration: 7000, easing: Easing.linear, useNativeDriver: false })
     );
 
     // Wave oscillation
@@ -135,14 +148,12 @@ export const CanvasVisualizer: React.FC<CanvasVisualizerProps> = ({ presetId }) 
 
     rot1.start(); rot2.start(); rot3.start();
     p1.start(); p2.start(); p3.start();
-    c1.start(); c2.start();
     w1.start(); w2.start();
     b1.start(); b2.start();
 
     return () => {
       rot1.stop(); rot2.stop(); rot3.stop();
       p1.stop(); p2.stop(); p3.stop();
-      c1.stop(); c2.stop();
       w1.stop(); w2.stop();
       b1.stop(); b2.stop();
     };
@@ -167,33 +178,13 @@ export const CanvasVisualizer: React.FC<CanvasVisualizerProps> = ({ presetId }) 
   const rot2DegRev = rotation2.interpolate({ inputRange: [0, 1], outputRange: ['360deg', '0deg'] });
   const rot3Deg = rotation3.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '360deg'] });
 
-  // Color interpolations for psychedelic shifting
-  const bgColor1 = colorShift1.interpolate({
-    inputRange: [0, 0.25, 0.5, 0.75, 1],
-    outputRange: ['#ff0080', '#8000ff', '#0080ff', '#00ff80', '#ff0080'],
-  });
-  const bgColor2 = colorShift2.interpolate({
-    inputRange: [0, 0.33, 0.66, 1],
-    outputRange: ['#ff00ff', '#00ffff', '#ffff00', '#ff00ff'],
-  });
-  const bgColor3 = colorShift1.interpolate({
-    inputRange: [0, 0.5, 1],
-    outputRange: ['#00ffff', '#ff00ff', '#00ffff'],
-  });
-
-  // Dynamic background
-  const backgroundColor = colorShift1.interpolate({
-    inputRange: [0, 0.5, 1],
-    outputRange: ['#000008', '#080010', '#000008'],
-  });
-
   // PLASMA - Psychedelic flowing energy
   const renderPlasma = () => (
-    <Animated.View style={[styles.fullScreen, { backgroundColor }]}>
+    <View style={[styles.fullScreen, { backgroundColor: bgColor }]}>
       {/* Outer morphing rings */}
       {[0, 1, 2, 3, 4, 5, 6].map((i) => {
         const size = 120 + i * 100;
-        const color = i % 2 === 0 ? bgColor1 : bgColor2;
+        const color = colors[i % 3];
         const rot = i % 3 === 0 ? rot1Deg : i % 3 === 1 ? rot2DegRev : rot3Deg;
         const pulseVal = i % 2 === 0 ? pulse1 : pulse2;
 
@@ -222,7 +213,7 @@ export const CanvasVisualizer: React.FC<CanvasVisualizerProps> = ({ presetId }) 
       {[0, 1, 2, 3].map((i) => {
         const angle = (i / 4) * Math.PI * 2;
         const dist = 150;
-        const color = i % 2 === 0 ? bgColor2 : bgColor3;
+        const color = colors[(i + 1) % 3];
         const pulseVal = i % 2 === 0 ? pulse1 : pulse3;
 
         return (
@@ -251,7 +242,7 @@ export const CanvasVisualizer: React.FC<CanvasVisualizerProps> = ({ presetId }) 
           styles.absoluteCenter,
           styles.plasmaCore,
           {
-            backgroundColor: bgColor1,
+            backgroundColor: colors[0],
             transform: [
               { scale: Animated.add(1.5, Animated.add(Animated.multiply(bassAnim, 1.2), Animated.multiply(pulse1, 0.4))) },
             ],
@@ -259,15 +250,15 @@ export const CanvasVisualizer: React.FC<CanvasVisualizerProps> = ({ presetId }) 
           },
         ]}
       />
-    </Animated.View>
+    </View>
   );
 
   // WAVEFORM - Undulating energy waves
   const renderWaveform = () => (
-    <Animated.View style={[styles.fullScreen, { backgroundColor }]}>
+    <View style={[styles.fullScreen, { backgroundColor: bgColor }]}>
       {/* Multiple wave layers */}
       {[-5, -4, -3, -2, -1, 0, 1, 2, 3, 4, 5].map((i) => {
-        const color = Math.abs(i) <= 1 ? bgColor1 : Math.abs(i) <= 3 ? bgColor2 : bgColor3;
+        const color = colors[Math.abs(i) <= 1 ? 0 : Math.abs(i) <= 3 ? 1 : 2];
         const audioVal = Math.abs(i) <= 1 ? bassAnim : Math.abs(i) <= 3 ? midAnim : trebleAnim;
         const waveVal = i % 2 === 0 ? wave1 : wave2;
 
@@ -299,7 +290,7 @@ export const CanvasVisualizer: React.FC<CanvasVisualizerProps> = ({ presetId }) 
             {
               left: side === 0 ? 0 : undefined,
               right: side === 1 ? 0 : undefined,
-              backgroundColor: side === 0 ? bgColor1 : bgColor2,
+              backgroundColor: colors[side],
               transform: [
                 { scaleY: Animated.add(0.4, Animated.multiply(bassAnim, 0.6)) },
                 { scaleX: Animated.add(1, Animated.multiply(pulse2, 0.5)) },
@@ -309,7 +300,7 @@ export const CanvasVisualizer: React.FC<CanvasVisualizerProps> = ({ presetId }) 
           ]}
         />
       ))}
-    </Animated.View>
+    </View>
   );
 
   // SPECTRUM - Dancing frequency bars
@@ -318,12 +309,12 @@ export const CanvasVisualizer: React.FC<CanvasVisualizerProps> = ({ presetId }) 
     const barWidth = width / barCount;
 
     return (
-      <Animated.View style={[styles.fullScreen, { backgroundColor }]}>
+      <View style={[styles.fullScreen, { backgroundColor: bgColor }]}>
         <View style={styles.spectrumBottom}>
           {Array.from({ length: barCount }).map((_, i) => {
             const normalized = i / barCount;
             const audioVal = normalized < 0.33 ? bassAnim : normalized < 0.66 ? midAnim : trebleAnim;
-            const color = normalized < 0.33 ? bgColor1 : normalized < 0.66 ? bgColor2 : bgColor3;
+            const color = colors[normalized < 0.33 ? 0 : normalized < 0.66 ? 1 : 2];
             const pulseVal = i % 3 === 0 ? pulse1 : i % 3 === 1 ? pulse2 : pulse3;
 
             return (
@@ -348,7 +339,7 @@ export const CanvasVisualizer: React.FC<CanvasVisualizerProps> = ({ presetId }) 
           {Array.from({ length: barCount }).map((_, i) => {
             const normalized = i / barCount;
             const audioVal = normalized < 0.33 ? bassAnim : normalized < 0.66 ? midAnim : trebleAnim;
-            const color = normalized < 0.33 ? bgColor2 : normalized < 0.66 ? bgColor3 : bgColor1;
+            const color = colors[(normalized < 0.33 ? 1 : normalized < 0.66 ? 2 : 0)];
 
             return (
               <Animated.View
@@ -366,17 +357,17 @@ export const CanvasVisualizer: React.FC<CanvasVisualizerProps> = ({ presetId }) 
             );
           })}
         </View>
-      </Animated.View>
+      </View>
     );
   };
 
   // KALEIDOSCOPE - Hypnotic symmetrical patterns
   const renderKaleidoscope = () => (
-    <Animated.View style={[styles.fullScreen, { backgroundColor }]}>
+    <View style={[styles.fullScreen, { backgroundColor: bgColor }]}>
       {/* Outer rotating layer */}
       <Animated.View style={[styles.absoluteCenter, styles.kaleidoOuter, { transform: [{ rotate: rot1Deg }] }]}>
         {Array.from({ length: 16 }).map((_, i) => {
-          const color = i % 4 === 0 ? bgColor1 : i % 4 === 1 ? bgColor2 : i % 4 === 2 ? bgColor3 : bgColor1;
+          const color = colors[i % 3];
           return (
             <Animated.View
               key={i}
@@ -400,7 +391,7 @@ export const CanvasVisualizer: React.FC<CanvasVisualizerProps> = ({ presetId }) 
       {/* Middle counter-rotating layer */}
       <Animated.View style={[styles.absoluteCenter, styles.kaleidoMiddle, { transform: [{ rotate: rot2DegRev }, { scale: Animated.add(1, Animated.multiply(breathe1, 0.2)) }] }]}>
         {Array.from({ length: 12 }).map((_, i) => {
-          const color = i % 3 === 0 ? bgColor2 : i % 3 === 1 ? bgColor3 : bgColor1;
+          const color = colors[i % 3];
           return (
             <Animated.View
               key={i}
@@ -428,7 +419,7 @@ export const CanvasVisualizer: React.FC<CanvasVisualizerProps> = ({ presetId }) 
             style={[
               styles.kaleidoInnerSegment,
               {
-                backgroundColor: i % 2 === 0 ? bgColor1 : bgColor3,
+                backgroundColor: colors[i % 2 === 0 ? 0 : 2],
                 transform: [
                   { rotate: `${i * 45}deg` },
                   { translateY: -50 },
@@ -446,21 +437,21 @@ export const CanvasVisualizer: React.FC<CanvasVisualizerProps> = ({ presetId }) 
           styles.absoluteCenter,
           styles.kaleidoCenter,
           {
-            backgroundColor: bgColor1,
+            backgroundColor: colors[0],
             transform: [{ scale: Animated.add(1, Animated.add(Animated.multiply(bassAnim, 0.5), Animated.multiply(pulse2, 0.3))) }],
           },
         ]}
       />
-    </Animated.View>
+    </View>
   );
 
   // TUNNEL - Infinite warp tunnel
   const renderTunnel = () => (
-    <Animated.View style={[styles.fullScreen, { backgroundColor }]}>
+    <View style={[styles.fullScreen, { backgroundColor: bgColor }]}>
       {/* Expanding rings */}
       {[0, 1, 2, 3, 4, 5, 6, 7, 8, 9].map((i) => {
         const baseSize = 60 + i * 90;
-        const color = i % 3 === 0 ? bgColor1 : i % 3 === 1 ? bgColor2 : bgColor3;
+        const color = colors[i % 3];
         const pulseVal = i % 2 === 0 ? pulse1 : pulse2;
 
         return (
@@ -491,7 +482,7 @@ export const CanvasVisualizer: React.FC<CanvasVisualizerProps> = ({ presetId }) 
             style={[
               styles.tunnelLine,
               {
-                backgroundColor: i % 3 === 0 ? bgColor1 : i % 3 === 1 ? bgColor2 : bgColor3,
+                backgroundColor: colors[i % 3],
                 transform: [{ rotate: `${i * 30}deg` }],
                 opacity: Animated.add(0.2, Animated.multiply(trebleAnim, 0.4)),
               },
@@ -511,7 +502,7 @@ export const CanvasVisualizer: React.FC<CanvasVisualizerProps> = ({ presetId }) 
               {
                 left: width / 2 + Math.cos(angle) * dist,
                 top: height / 2 + Math.sin(angle) * dist,
-                backgroundColor: i % 2 === 0 ? bgColor2 : bgColor3,
+                backgroundColor: colors[i % 2 === 0 ? 1 : 2],
                 transform: [{ scale: Animated.add(0.5, Animated.multiply(trebleAnim, 1.5)) }],
                 opacity: Animated.add(0.3, Animated.multiply(midAnim, 0.6)),
               },
@@ -519,12 +510,12 @@ export const CanvasVisualizer: React.FC<CanvasVisualizerProps> = ({ presetId }) 
           />
         );
       })}
-    </Animated.View>
+    </View>
   );
 
   // NEBULA - Cosmic gas clouds
   const renderNebula = () => (
-    <Animated.View style={[styles.fullScreen, { backgroundColor }]}>
+    <View style={[styles.fullScreen, { backgroundColor: bgColor }]}>
       {/* Large nebula clouds */}
       {[
         { x: -120, y: -180, size: 350 },
@@ -533,7 +524,7 @@ export const CanvasVisualizer: React.FC<CanvasVisualizerProps> = ({ presetId }) 
         { x: 140, y: 130, size: 280 },
         { x: 0, y: 0, size: 250 },
       ].map((orb, i) => {
-        const color = i % 3 === 0 ? bgColor1 : i % 3 === 1 ? bgColor2 : bgColor3;
+        const color = colors[i % 3];
         const rot = i % 2 === 0 ? rot3Deg : rot2DegRev;
         const pulseVal = i % 2 === 0 ? pulse2 : pulse3;
 
@@ -563,7 +554,7 @@ export const CanvasVisualizer: React.FC<CanvasVisualizerProps> = ({ presetId }) 
       {Array.from({ length: 24 }).map((_, i) => {
         const angle = (i / 24) * Math.PI * 2;
         const dist = 100 + (i % 4) * 50;
-        const color = i % 4 === 0 ? bgColor1 : i % 4 === 1 ? bgColor2 : i % 4 === 2 ? bgColor3 : bgColor1;
+        const color = colors[i % 3];
         const waveVal = i % 2 === 0 ? wave1 : wave2;
 
         return (
@@ -585,16 +576,16 @@ export const CanvasVisualizer: React.FC<CanvasVisualizerProps> = ({ presetId }) 
           />
         );
       })}
-    </Animated.View>
+    </View>
   );
 
   // FRACTAL - Recursive geometry
   const renderFractal = () => (
-    <Animated.View style={[styles.fullScreen, { backgroundColor }]}>
+    <View style={[styles.fullScreen, { backgroundColor: bgColor }]}>
       {/* Nested shapes */}
       {[0, 1, 2, 3, 4, 5, 6, 7].map((i) => {
         const size = 60 + i * 60;
-        const color = i % 4 === 0 ? bgColor1 : i % 4 === 1 ? bgColor2 : i % 4 === 2 ? bgColor3 : bgColor1;
+        const color = colors[i % 3];
         const isCircle = i % 2 === 0;
 
         return (
@@ -626,7 +617,7 @@ export const CanvasVisualizer: React.FC<CanvasVisualizerProps> = ({ presetId }) 
             style={[
               styles.fractalArm,
               {
-                backgroundColor: i % 3 === 0 ? bgColor1 : i % 3 === 1 ? bgColor2 : bgColor3,
+                backgroundColor: colors[i % 3],
                 transform: [
                   { rotate: `${i * 60}deg` },
                   { translateX: 100 },
@@ -646,7 +637,7 @@ export const CanvasVisualizer: React.FC<CanvasVisualizerProps> = ({ presetId }) 
             style={[
               styles.fractalArmInner,
               {
-                backgroundColor: i % 2 === 0 ? bgColor2 : bgColor3,
+                backgroundColor: colors[i % 2 === 0 ? 1 : 2],
                 transform: [
                   { rotate: `${i * 90}deg` },
                   { translateX: 60 },
@@ -664,22 +655,22 @@ export const CanvasVisualizer: React.FC<CanvasVisualizerProps> = ({ presetId }) 
           styles.absoluteCenter,
           styles.fractalCenter,
           {
-            backgroundColor: bgColor1,
+            backgroundColor: colors[0],
             transform: [{ scale: Animated.add(1, Animated.add(Animated.multiply(bassAnim, 0.8), Animated.multiply(pulse1, 0.3))) }],
           },
         ]}
       />
-    </Animated.View>
+    </View>
   );
 
   // VORTEX - Spiraling energy
   const renderVortex = () => (
-    <Animated.View style={[styles.fullScreen, { backgroundColor }]}>
+    <View style={[styles.fullScreen, { backgroundColor: bgColor }]}>
       {/* Outer spiral */}
       <Animated.View style={[styles.absoluteCenter, styles.vortexOuter, { transform: [{ rotate: rot1Deg }] }]}>
         {Array.from({ length: 20 }).map((_, i) => {
           const length = 50 + (i % 5) * 35;
-          const color = i % 4 === 0 ? bgColor1 : i % 4 === 1 ? bgColor2 : i % 4 === 2 ? bgColor3 : bgColor1;
+          const color = colors[i % 3];
 
           return (
             <Animated.View
@@ -709,7 +700,7 @@ export const CanvasVisualizer: React.FC<CanvasVisualizerProps> = ({ presetId }) 
             style={[
               styles.vortexInnerArm,
               {
-                backgroundColor: i % 3 === 0 ? bgColor2 : i % 3 === 1 ? bgColor3 : bgColor1,
+                backgroundColor: colors[i % 3],
                 transform: [
                   { rotate: `${i * 30}deg` },
                   { translateY: -60 },
@@ -733,7 +724,7 @@ export const CanvasVisualizer: React.FC<CanvasVisualizerProps> = ({ presetId }) 
               {
                 left: width / 2 + Math.cos(angle) * dist - 12,
                 top: height / 2 + Math.sin(angle) * dist - 12,
-                backgroundColor: i % 2 === 0 ? bgColor1 : bgColor3,
+                backgroundColor: colors[i % 2 === 0 ? 0 : 2],
                 transform: [
                   { scale: Animated.add(1, Animated.multiply(trebleAnim, 1)) },
                   { translateX: Animated.multiply(wave1, 25) },
@@ -751,12 +742,12 @@ export const CanvasVisualizer: React.FC<CanvasVisualizerProps> = ({ presetId }) 
           styles.absoluteCenter,
           styles.vortexCenter,
           {
-            backgroundColor: bgColor1,
+            backgroundColor: colors[0],
             transform: [{ scale: Animated.add(1, Animated.add(Animated.multiply(bassAnim, 0.7), Animated.multiply(pulse2, 0.3))) }],
           },
         ]}
       />
-    </Animated.View>
+    </View>
   );
 
   const renderVisualization = useCallback(() => {
@@ -771,7 +762,7 @@ export const CanvasVisualizer: React.FC<CanvasVisualizerProps> = ({ presetId }) 
       case 'vortex': return renderVortex();
       default: return renderPlasma();
     }
-  }, [style, bassAnim, midAnim, trebleAnim, rot1Deg, rot1DegRev, rot2Deg, rot2DegRev, rot3Deg, pulse1, pulse2, pulse3, bgColor1, bgColor2, bgColor3, wave1, wave2, breathe1, breathe2, backgroundColor]);
+  }, [style, colors, bgColor, bassAnim, midAnim, trebleAnim, rot1Deg, rot1DegRev, rot2Deg, rot2DegRev, rot3Deg, pulse1, pulse2, pulse3, wave1, wave2, breathe1, breathe2]);
 
   return renderVisualization();
 };
