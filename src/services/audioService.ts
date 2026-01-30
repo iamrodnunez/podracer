@@ -6,6 +6,7 @@ import { useQueueStore } from '../store/useQueueStore';
 import { usePodcastStore } from '../store/usePodcastStore';
 import * as storageService from './storageService';
 import * as downloadService from './downloadService';
+import * as podcastService from './podcastService';
 
 let sound: Audio.Sound | null = null;
 let isServiceInitialized = false;
@@ -430,5 +431,50 @@ export const persistQueue = async (): Promise<void> => {
     await storageService.saveQueueWithEpisodes(queue);
   } catch (error) {
     console.error('Error persisting queue:', error);
+  }
+};
+
+// Load podcasts and episodes from storage, then refresh feeds in background
+export const loadAndRefreshPodcasts = async (): Promise<void> => {
+  const podcastStore = usePodcastStore.getState();
+
+  try {
+    // Load podcasts from storage
+    const podcasts = await podcastService.loadPodcasts();
+    podcastStore.setPodcasts(podcasts);
+
+    // Load episodes for each podcast
+    for (const podcast of podcasts) {
+      const episodes = await podcastService.loadEpisodes(podcast.id);
+      podcastStore.setEpisodes(podcast.id, episodes);
+    }
+
+    // Refresh all feeds in background (don't await - let it happen async)
+    if (podcasts.length > 0) {
+      refreshAllPodcastsInBackground(podcasts);
+    }
+  } catch (error) {
+    console.error('Error loading podcasts:', error);
+  }
+};
+
+// Refresh all podcast feeds in background without blocking
+const refreshAllPodcastsInBackground = async (podcasts: Podcast[]): Promise<void> => {
+  const podcastStore = usePodcastStore.getState();
+
+  for (const podcast of podcasts) {
+    try {
+      const newEpisodes = await podcastService.refreshPodcast(podcast);
+
+      // If new episodes were found, reload the episodes for this podcast
+      if (newEpisodes.length > 0) {
+        const allEpisodes = await podcastService.loadEpisodes(podcast.id);
+        podcastStore.setEpisodes(podcast.id, allEpisodes);
+        console.log(`Found ${newEpisodes.length} new episodes for ${podcast.title}`);
+      }
+    } catch (error) {
+      console.error(`Error refreshing ${podcast.title}:`, error);
+      // Continue with other podcasts even if one fails
+    }
   }
 };
