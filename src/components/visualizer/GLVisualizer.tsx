@@ -1,5 +1,5 @@
 import React, { useCallback, useRef, useEffect, useState } from 'react';
-import { View, StyleSheet, Dimensions, Platform, Text } from 'react-native';
+import { View, StyleSheet, Dimensions, Platform, Text, AppState, AppStateStatus } from 'react-native';
 import { GLView, ExpoWebGLRenderingContext } from 'expo-gl';
 import { useAudioAnalysis } from '../../hooks/useAudioAnalysis';
 import { useSettingsStore } from '../../store/useSettingsStore';
@@ -23,11 +23,14 @@ export const GLVisualizer: React.FC<GLVisualizerProps> = ({
   // Refs for GL context and animation
   const glRef = useRef<ExpoWebGLRenderingContext | null>(null);
   const programRef = useRef<WebGLProgram | null>(null);
+  const bufferRef = useRef<WebGLBuffer | null>(null);
   const rafRef = useRef<number | null>(null);
   const startTimeRef = useRef<number>(Date.now());
   const currentPresetRef = useRef<string>(presetId || shaderPresets[0].id);
   const analysisRef = useRef(analysisData);
   const sensitivityRef = useRef(sensitivity);
+  const mountedRef = useRef(true);
+  const isRenderingRef = useRef(false);
 
   // Update refs when props change
   useEffect(() => {
@@ -37,6 +40,51 @@ export const GLVisualizer: React.FC<GLVisualizerProps> = ({
   useEffect(() => {
     sensitivityRef.current = sensitivity;
   }, [sensitivity]);
+
+  // Handle app state changes (pause rendering when backgrounded on Android)
+  useEffect(() => {
+    const handleAppStateChange = (nextAppState: AppStateStatus) => {
+      if (Platform.OS === 'android') {
+        if (nextAppState === 'active' && mountedRef.current) {
+          // Resume rendering when app comes back to foreground
+          isRenderingRef.current = true;
+        } else if (nextAppState === 'background' || nextAppState === 'inactive') {
+          // Pause rendering when app goes to background
+          isRenderingRef.current = false;
+        }
+      }
+    };
+
+    const subscription = AppState.addEventListener('change', handleAppStateChange);
+    return () => subscription.remove();
+  }, []);
+
+  const cleanupGL = useCallback(() => {
+    const gl = glRef.current;
+    if (!gl) return;
+
+    try {
+      // Cancel animation frame first
+      if (rafRef.current) {
+        cancelAnimationFrame(rafRef.current);
+        rafRef.current = null;
+      }
+
+      // Delete program
+      if (programRef.current) {
+        gl.deleteProgram(programRef.current);
+        programRef.current = null;
+      }
+
+      // Delete buffer
+      if (bufferRef.current) {
+        gl.deleteBuffer(bufferRef.current);
+        bufferRef.current = null;
+      }
+    } catch (error) {
+      console.error('Error cleaning up GL resources:', error);
+    }
+  }, []);
 
   const createShader = useCallback(
     (gl: ExpoWebGLRenderingContext, type: number, source: string): WebGLShader | null => {
@@ -103,7 +151,7 @@ export const GLVisualizer: React.FC<GLVisualizerProps> = ({
           return null;
         }
 
-        // Clean up shaders after linking
+        // Clean up shaders after linking (they're now part of the program)
         gl.deleteShader(vertexShader);
         gl.deleteShader(fragmentShader);
 
@@ -125,6 +173,12 @@ export const GLVisualizer: React.FC<GLVisualizerProps> = ({
           programRef.current = null;
         }
 
+        // Delete old buffer
+        if (bufferRef.current) {
+          gl.deleteBuffer(bufferRef.current);
+          bufferRef.current = null;
+        }
+
         // Create new program
         const program = createProgram(gl, preset.vertexShader, preset.fragmentShader);
         if (!program) {
@@ -143,12 +197,32 @@ export const GLVisualizer: React.FC<GLVisualizerProps> = ({
         ]);
 
         const buffer = gl.createBuffer();
+        if (!buffer) {
+          console.error('Failed to create vertex buffer');
+          gl.deleteProgram(program);
+          programRef.current = null;
+          return false;
+        }
+
+        bufferRef.current = buffer;
         gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
         gl.bufferData(gl.ARRAY_BUFFER, vertices, gl.STATIC_DRAW);
 
         const positionLocation = gl.getAttribLocation(program, 'position');
+        if (positionLocation === -1) {
+          console.error('Failed to get position attribute location');
+          return false;
+        }
+
         gl.enableVertexAttribArray(positionLocation);
         gl.vertexAttribPointer(positionLocation, 2, gl.FLOAT, false, 0, 0);
+
+        // Check for GL errors
+        const error = gl.getError();
+        if (error !== gl.NO_ERROR) {
+          console.error('GL error during setup:', error);
+          return false;
+        }
 
         return true;
       } catch (error) {
@@ -161,12 +235,12 @@ export const GLVisualizer: React.FC<GLVisualizerProps> = ({
 
   // Recompile shader when preset changes
   useEffect(() => {
-    if (presetId && presetId !== currentPresetRef.current && glRef.current) {
+    if (presetId && presetId !== currentPresetRef.current && glRef.current && mountedRef.current) {
       currentPresetRef.current = presetId;
       const preset = getPresetById(presetId) || shaderPresets[0];
       // Defer shader recompilation to next frame to avoid render conflicts
       requestAnimationFrame(() => {
-        if (glRef.current) {
+        if (glRef.current && mountedRef.current) {
           setupProgram(glRef.current, preset);
         }
       });
@@ -175,8 +249,11 @@ export const GLVisualizer: React.FC<GLVisualizerProps> = ({
 
   const onContextCreate = useCallback(
     (gl: ExpoWebGLRenderingContext) => {
+      if (!mountedRef.current) return;
+
       try {
         glRef.current = gl;
+        isRenderingRef.current = true;
 
         // Get current preset
         const preset = getPresetById(currentPresetRef.current) || shaderPresets[0];
@@ -189,11 +266,29 @@ export const GLVisualizer: React.FC<GLVisualizerProps> = ({
 
         // Start render loop
         const render = () => {
-          try {
-            if (!glRef.current || !programRef.current) return;
+          // Check if we should continue rendering
+          if (!mountedRef.current || !isRenderingRef.current) {
+            rafRef.current = requestAnimationFrame(render);
+            return;
+          }
 
+          try {
             const gl = glRef.current;
             const program = programRef.current;
+
+            // Safety checks
+            if (!gl || !program) {
+              rafRef.current = requestAnimationFrame(render);
+              return;
+            }
+
+            // Check for context loss (important for Android)
+            if (gl.isContextLost && gl.isContextLost()) {
+              console.warn('GL context lost, waiting for recovery...');
+              rafRef.current = requestAnimationFrame(render);
+              return;
+            }
+
             const time = (Date.now() - startTimeRef.current) / 1000;
             const analysis = analysisRef.current;
             const sens = sensitivityRef.current;
@@ -204,34 +299,37 @@ export const GLVisualizer: React.FC<GLVisualizerProps> = ({
 
             gl.useProgram(program);
 
-            // Set uniforms
+            // Set uniforms (check for null locations)
             const timeLocation = gl.getUniformLocation(program, 'time');
             const resolutionLocation = gl.getUniformLocation(program, 'resolution');
             const bassLocation = gl.getUniformLocation(program, 'bass');
             const midLocation = gl.getUniformLocation(program, 'mid');
             const trebleLocation = gl.getUniformLocation(program, 'treble');
 
-            if (timeLocation) gl.uniform1f(timeLocation, time);
-            if (resolutionLocation) {
+            if (timeLocation !== null) gl.uniform1f(timeLocation, time);
+            if (resolutionLocation !== null) {
               gl.uniform2f(
                 resolutionLocation,
                 gl.drawingBufferWidth,
                 gl.drawingBufferHeight
               );
             }
-            if (bassLocation) gl.uniform1f(bassLocation, analysis.bass * sens);
-            if (midLocation) gl.uniform1f(midLocation, analysis.mid * sens);
-            if (trebleLocation) gl.uniform1f(trebleLocation, analysis.treble * sens);
+            if (bassLocation !== null) gl.uniform1f(bassLocation, analysis.bass * sens);
+            if (midLocation !== null) gl.uniform1f(midLocation, analysis.mid * sens);
+            if (trebleLocation !== null) gl.uniform1f(trebleLocation, analysis.treble * sens);
 
             // Draw
             gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
 
+            // Must call endFrameEXP to flush the frame
             gl.endFrameEXP();
 
+            // Schedule next frame
             rafRef.current = requestAnimationFrame(render);
           } catch (error) {
             console.error('Render loop error:', error);
-            // Don't set error state here to avoid infinite re-renders
+            // Continue the loop even on error, but don't crash
+            rafRef.current = requestAnimationFrame(render);
           }
         };
 
@@ -244,14 +342,25 @@ export const GLVisualizer: React.FC<GLVisualizerProps> = ({
     [setupProgram]
   );
 
+  // Cleanup on unmount
   useEffect(() => {
+    mountedRef.current = true;
+    isRenderingRef.current = true;
+
     return () => {
+      mountedRef.current = false;
+      isRenderingRef.current = false;
+
+      // Cancel animation frame
       if (rafRef.current) {
         cancelAnimationFrame(rafRef.current);
         rafRef.current = null;
       }
+
+      // Clean up GL resources
+      cleanupGL();
     };
-  }, []);
+  }, [cleanupGL]);
 
   // Show error fallback if GL fails
   if (glError) {
@@ -272,6 +381,7 @@ export const GLVisualizer: React.FC<GLVisualizerProps> = ({
         ]}
         onContextCreate={onContextCreate}
         // Disable MSAA on Android for better compatibility
+        // Some Android devices don't support MSAA well
         msaaSamples={Platform.OS === 'android' ? 0 : 4}
       />
     </View>
