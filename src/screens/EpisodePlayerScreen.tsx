@@ -291,8 +291,8 @@ const styles = StyleSheet.create({
     marginBottom: 24,
   },
   artwork: {
-    width: 280,
-    height: 280,
+    width: 340,
+    height: 340,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 8 },
     shadowOpacity: 0.5,
@@ -300,8 +300,8 @@ const styles = StyleSheet.create({
     elevation: 10,
   },
   artworkPlaceholder: {
-    width: 280,
-    height: 280,
+    width: 340,
+    height: 340,
     backgroundColor: '#1F2937',
     alignItems: 'center',
     justifyContent: 'center',

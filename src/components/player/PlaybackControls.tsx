@@ -92,7 +92,7 @@ const styles = StyleSheet.create({
   mainControls: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 24,
+    gap: 48,
   },
   speedButton: {
     backgroundColor: '#374151',
