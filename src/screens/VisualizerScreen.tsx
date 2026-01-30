@@ -320,6 +320,7 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.2)',
+    opacity: 0.65,
   },
   artwork: {
     width: '100%',

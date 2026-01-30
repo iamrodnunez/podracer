@@ -4,33 +4,40 @@ import { usePlayerStore } from '../store/usePlayerStore';
 
 const FFT_SIZE = 256;
 
+// Smoothing factor (0-1, higher = smoother/slower response)
+const SMOOTHING = 0.85;
+
 let previousBass = 0;
-let animationFrame = 0;
+let previousMid = 0;
+let previousTreble = 0;
+let smoothedBass = 0;
+let smoothedMid = 0;
+let smoothedTreble = 0;
 let lastBeatTime = 0;
 
 // Generate dynamic waveform data based on time and simulated audio intensity
 const generateWaveform = (time: number, intensity: number): Float32Array => {
   const waveform = new Float32Array(FFT_SIZE);
 
-  // Create multiple wave components for variety
-  const bassFreq = 2 + Math.sin(time * 0.5) * 0.5;
-  const midFreq = 5 + Math.sin(time * 0.7) * 2;
-  const highFreq = 12 + Math.sin(time * 1.1) * 3;
+  // Create multiple wave components for variety - slower time multipliers for smoother motion
+  const bassFreq = 2 + Math.sin(time * 0.3) * 0.5;
+  const midFreq = 5 + Math.sin(time * 0.5) * 2;
+  const highFreq = 12 + Math.sin(time * 0.7) * 3;
 
   for (let i = 0; i < FFT_SIZE; i++) {
     const phase = (i / FFT_SIZE) * Math.PI * 2;
 
-    // Bass wave (slow, large amplitude)
-    const bass = Math.sin(phase * bassFreq + time * 2) * 0.4 * intensity;
+    // Bass wave (slow, large amplitude) - reduced time multiplier
+    const bass = Math.sin(phase * bassFreq + time * 1.2) * 0.4 * intensity;
 
-    // Mid wave
-    const mid = Math.sin(phase * midFreq + time * 4) * 0.25 * intensity;
+    // Mid wave - reduced time multiplier
+    const mid = Math.sin(phase * midFreq + time * 2) * 0.25 * intensity;
 
-    // High frequency detail
-    const high = Math.sin(phase * highFreq + time * 8) * 0.15 * intensity;
+    // High frequency detail - reduced time multiplier
+    const high = Math.sin(phase * highFreq + time * 4) * 0.15 * intensity;
 
-    // Add some controlled randomness
-    const noise = (Math.sin(i * 127.1 + time * 50) * 0.5 + 0.5) * 0.1 * intensity;
+    // Minimal noise - greatly reduced for smoother visuals
+    const noise = (Math.sin(i * 127.1 + time * 10) * 0.5 + 0.5) * 0.02 * intensity;
 
     waveform[i] = bass + mid + high + noise;
   }
@@ -42,25 +49,25 @@ const generateWaveform = (time: number, intensity: number): Float32Array => {
 const generateSpectrum = (time: number, intensity: number): Float32Array => {
   const spectrum = new Float32Array(FFT_SIZE);
 
-  // Simulate beat pattern
-  const beatPhase = (time * 2) % 1;
+  // Simulate beat pattern - slower for smoother pulsing
+  const beatPhase = (time * 1.2) % 1;
   const beatIntensity = Math.pow(Math.max(0, 1 - beatPhase * 2), 2);
 
   for (let i = 0; i < FFT_SIZE; i++) {
     const freq = i / FFT_SIZE;
 
     // Bass frequencies (0-10%) - strong pulsing
-    const bassRange = Math.exp(-freq * 15) * (0.8 + beatIntensity * 0.5);
+    const bassRange = Math.exp(-freq * 15) * (0.8 + beatIntensity * 0.4);
 
     // Mid frequencies (10-50%) - moderate energy
     const midCenter = 0.25;
     const midRange = Math.exp(-Math.pow((freq - midCenter) * 4, 2)) * 0.5;
 
-    // High frequencies (50-100%) - sparkle
-    const highRange = freq > 0.5 ? (Math.sin(time * 10 + i * 0.5) * 0.5 + 0.5) * 0.3 * (1 - freq) : 0;
+    // High frequencies (50-100%) - sparkle - slower variation
+    const highRange = freq > 0.5 ? (Math.sin(time * 4 + i * 0.3) * 0.5 + 0.5) * 0.25 * (1 - freq) : 0;
 
-    // Combine with time variation
-    const timeVar = Math.sin(time * 3 + freq * 10) * 0.2 + 0.8;
+    // Combine with time variation - slower and less dramatic
+    const timeVar = Math.sin(time * 1.5 + freq * 5) * 0.15 + 0.85;
 
     spectrum[i] = (bassRange + midRange + highRange) * intensity * timeVar * 200;
   }
@@ -144,17 +151,26 @@ export class AudioAnalyzer {
       trebleSum += spectrum[i];
     }
 
-    const bass = Math.min(1, (bassSum / bassEnd) / 150) * this.intensity;
-    const mid = Math.min(1, (midSum / (midEnd - bassEnd)) / 100) * this.intensity;
-    const treble = Math.min(1, (trebleSum / (FFT_SIZE - midEnd)) / 80) * this.intensity;
+    const rawBass = Math.min(1, (bassSum / bassEnd) / 150) * this.intensity;
+    const rawMid = Math.min(1, (midSum / (midEnd - bassEnd)) / 100) * this.intensity;
+    const rawTreble = Math.min(1, (trebleSum / (FFT_SIZE - midEnd)) / 80) * this.intensity;
 
-    // Beat detection
+    // Apply smoothing to reduce jitter
+    smoothedBass = smoothedBass * SMOOTHING + rawBass * (1 - SMOOTHING);
+    smoothedMid = smoothedMid * SMOOTHING + rawMid * (1 - SMOOTHING);
+    smoothedTreble = smoothedTreble * SMOOTHING + rawTreble * (1 - SMOOTHING);
+
+    const bass = smoothedBass;
+    const mid = smoothedMid;
+    const treble = smoothedTreble;
+
+    // Beat detection - use raw values for responsiveness
     const now = Date.now();
-    const beat = bass - previousBass > 0.15 && (now - lastBeatTime) > 200;
+    const beat = rawBass - previousBass > 0.15 && (now - lastBeatTime) > 200;
     if (beat) {
       lastBeatTime = now;
     }
-    previousBass = bass * 0.7 + previousBass * 0.3; // Smooth
+    previousBass = rawBass * 0.7 + previousBass * 0.3;
 
     // Calculate volume
     let volume = 0;
