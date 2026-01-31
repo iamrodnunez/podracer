@@ -11,30 +11,52 @@ interface GLVisualizerProps {
   onPresetChange?: (preset: ShaderPreset) => void;
 }
 
+// Ultra-simple vertex shader
+const VERTEX_SHADER = `
+attribute vec2 position;
+void main() {
+  gl_Position = vec4(position, 0.0, 1.0);
+}
+`;
+
+// Ultra-simple fragment shader - guaranteed to work on any GLES 2.0 device
+const SIMPLE_FRAGMENT_SHADER = `
+precision lowp float;
+uniform float time;
+uniform float bass;
+uniform float mid;
+uniform float treble;
+
+void main() {
+  float r = 0.3 + bass * 0.5 + sin(time) * 0.2;
+  float g = 0.2 + mid * 0.4 + sin(time * 1.3) * 0.15;
+  float b = 0.5 + treble * 0.3 + sin(time * 0.7) * 0.2;
+  gl_FragColor = vec4(r, g, b, 1.0);
+}
+`;
+
 export const GLVisualizer: React.FC<GLVisualizerProps> = ({
   presetId,
   onPresetChange,
 }) => {
   const analysisData = useAudioAnalysis();
   const sensitivity = useSettingsStore((state) => state.visualizer.sensitivity);
-  const [dimensions] = useState(Dimensions.get('window'));
-  const [glError, setGlError] = useState<string | null>(null);
-  const [usingSafeMode, setUsingSafeMode] = useState(false);
+  const [dimensions] = useState(() => Dimensions.get('window'));
+  const [isReady, setIsReady] = useState(false);
+  const [hasError, setHasError] = useState(false);
+  const [errorMessage, setErrorMessage] = useState('');
 
-  // Refs for GL context and animation
+  // Refs
   const glRef = useRef<ExpoWebGLRenderingContext | null>(null);
   const programRef = useRef<WebGLProgram | null>(null);
-  const bufferRef = useRef<WebGLBuffer | null>(null);
   const rafRef = useRef<number | null>(null);
   const startTimeRef = useRef<number>(Date.now());
-  const currentPresetRef = useRef<string>(presetId || shaderPresets[0].id);
   const analysisRef = useRef(analysisData);
   const sensitivityRef = useRef(sensitivity);
   const mountedRef = useRef(true);
-  const isRenderingRef = useRef(false);
-  const failedPresetsRef = useRef<Set<string>>(new Set());
+  const isActiveRef = useRef(true);
 
-  // Update refs when props change
+  // Update refs
   useEffect(() => {
     analysisRef.current = analysisData;
   }, [analysisData]);
@@ -43,359 +65,175 @@ export const GLVisualizer: React.FC<GLVisualizerProps> = ({
     sensitivityRef.current = sensitivity;
   }, [sensitivity]);
 
-  // Handle app state changes (pause rendering when backgrounded on Android)
-  useEffect(() => {
-    const handleAppStateChange = (nextAppState: AppStateStatus) => {
-      if (Platform.OS === 'android') {
-        if (nextAppState === 'active' && mountedRef.current) {
-          isRenderingRef.current = true;
-        } else if (nextAppState === 'background' || nextAppState === 'inactive') {
-          isRenderingRef.current = false;
-        }
-      }
-    };
-
-    const subscription = AppState.addEventListener('change', handleAppStateChange);
-    return () => subscription.remove();
-  }, []);
-
-  const cleanupGL = useCallback(() => {
-    const gl = glRef.current;
-    if (!gl) return;
-
-    try {
-      if (rafRef.current) {
-        cancelAnimationFrame(rafRef.current);
-        rafRef.current = null;
-      }
-
-      if (programRef.current) {
-        gl.deleteProgram(programRef.current);
-        programRef.current = null;
-      }
-
-      if (bufferRef.current) {
-        gl.deleteBuffer(bufferRef.current);
-        bufferRef.current = null;
-      }
-    } catch (error) {
-      console.warn('Error cleaning up GL resources:', error);
-    }
-  }, []);
-
-  const createShader = useCallback(
-    (gl: ExpoWebGLRenderingContext, type: number, source: string): WebGLShader | null => {
-      try {
-        const shader = gl.createShader(type);
-        if (!shader) {
-          console.warn('Failed to create shader object');
-          return null;
-        }
-
-        gl.shaderSource(shader, source);
-        gl.compileShader(shader);
-
-        if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
-          const info = gl.getShaderInfoLog(shader);
-          console.warn('Shader compilation failed:', info);
-          gl.deleteShader(shader);
-          return null;
-        }
-
-        return shader;
-      } catch (error) {
-        console.warn('Exception creating shader:', error);
-        return null;
-      }
-    },
-    []
-  );
-
-  const createProgram = useCallback(
-    (
-      gl: ExpoWebGLRenderingContext,
-      vertexSource: string,
-      fragmentSource: string
-    ): WebGLProgram | null => {
-      let vertexShader: WebGLShader | null = null;
-      let fragmentShader: WebGLShader | null = null;
-
-      try {
-        vertexShader = createShader(gl, gl.VERTEX_SHADER, vertexSource);
-        fragmentShader = createShader(gl, gl.FRAGMENT_SHADER, fragmentSource);
-
-        if (!vertexShader || !fragmentShader) {
-          if (vertexShader) gl.deleteShader(vertexShader);
-          if (fragmentShader) gl.deleteShader(fragmentShader);
-          return null;
-        }
-
-        const program = gl.createProgram();
-        if (!program) {
-          gl.deleteShader(vertexShader);
-          gl.deleteShader(fragmentShader);
-          return null;
-        }
-
-        gl.attachShader(program, vertexShader);
-        gl.attachShader(program, fragmentShader);
-        gl.linkProgram(program);
-
-        if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
-          console.warn('Program linking failed:', gl.getProgramInfoLog(program));
-          gl.deleteProgram(program);
-          gl.deleteShader(vertexShader);
-          gl.deleteShader(fragmentShader);
-          return null;
-        }
-
-        // Shaders are now part of program, safe to delete
-        gl.deleteShader(vertexShader);
-        gl.deleteShader(fragmentShader);
-
-        return program;
-      } catch (error) {
-        console.warn('Exception creating program:', error);
-        if (vertexShader) gl.deleteShader(vertexShader);
-        if (fragmentShader) gl.deleteShader(fragmentShader);
-        return null;
-      }
-    },
-    [createShader]
-  );
-
-  const setupProgram = useCallback(
-    (gl: ExpoWebGLRenderingContext, preset: ShaderPreset, isFallback: boolean = false): boolean => {
-      try {
-        // Clean up old resources
-        if (programRef.current) {
-          gl.deleteProgram(programRef.current);
-          programRef.current = null;
-        }
-
-        if (bufferRef.current) {
-          gl.deleteBuffer(bufferRef.current);
-          bufferRef.current = null;
-        }
-
-        // Try to create program
-        const program = createProgram(gl, preset.vertexShader, preset.fragmentShader);
-
-        if (!program) {
-          console.warn(`Shader "${preset.id}" failed to compile`);
-
-          // If this wasn't already a fallback attempt, try the safe shader
-          if (!isFallback && preset.id !== 'safe_fallback') {
-            failedPresetsRef.current.add(preset.id);
-            console.log('Falling back to safe shader...');
-            setUsingSafeMode(true);
-            return setupProgram(gl, safeShader, true);
-          }
-
-          return false;
-        }
-
-        programRef.current = program;
-
-        // Set up vertex buffer
-        const vertices = new Float32Array([
-          -1, -1,
-          1, -1,
-          -1, 1,
-          1, 1,
-        ]);
-
-        const buffer = gl.createBuffer();
-        if (!buffer) {
-          console.warn('Failed to create vertex buffer');
-          gl.deleteProgram(program);
-          programRef.current = null;
-          return false;
-        }
-
-        bufferRef.current = buffer;
-        gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
-        gl.bufferData(gl.ARRAY_BUFFER, vertices, gl.STATIC_DRAW);
-
-        const positionLocation = gl.getAttribLocation(program, 'position');
-        if (positionLocation === -1) {
-          console.warn('Failed to get position attribute');
-          return false;
-        }
-
-        gl.enableVertexAttribArray(positionLocation);
-        gl.vertexAttribPointer(positionLocation, 2, gl.FLOAT, false, 0, 0);
-
-        // Clear any GL errors
-        while (gl.getError() !== gl.NO_ERROR) {
-          // Clear error queue
-        }
-
-        return true;
-      } catch (error) {
-        console.warn('Exception setting up program:', error);
-        return false;
-      }
-    },
-    [createProgram]
-  );
-
-  // Recompile shader when preset changes
-  useEffect(() => {
-    if (presetId && presetId !== currentPresetRef.current && glRef.current && mountedRef.current) {
-      currentPresetRef.current = presetId;
-
-      // If this preset previously failed, use safe shader
-      if (failedPresetsRef.current.has(presetId)) {
-        console.log(`Preset "${presetId}" previously failed, using safe shader`);
-        requestAnimationFrame(() => {
-          if (glRef.current && mountedRef.current) {
-            setupProgram(glRef.current, safeShader, true);
-            setUsingSafeMode(true);
-          }
-        });
-        return;
-      }
-
-      const preset = getPresetById(presetId) || shaderPresets[0];
-      requestAnimationFrame(() => {
-        if (glRef.current && mountedRef.current) {
-          const success = setupProgram(glRef.current, preset);
-          if (success && preset.id !== 'safe_fallback') {
-            setUsingSafeMode(false);
-          }
-        }
-      });
-    }
-  }, [presetId, setupProgram]);
-
-  const onContextCreate = useCallback(
-    (gl: ExpoWebGLRenderingContext) => {
-      if (!mountedRef.current) return;
-
-      try {
-        glRef.current = gl;
-        isRenderingRef.current = true;
-
-        // Log GL info for debugging
-        const vendor = gl.getParameter(gl.VENDOR);
-        const renderer = gl.getParameter(gl.RENDERER);
-        console.log(`GL Vendor: ${vendor}, Renderer: ${renderer}`);
-
-        // Get current preset
-        let preset = getPresetById(currentPresetRef.current) || shaderPresets[0];
-
-        // Try to set up the shader
-        let success = setupProgram(gl, preset);
-
-        // If first preset fails, try safe shader
-        if (!success) {
-          console.log('Primary shader failed, trying safe shader...');
-          success = setupProgram(gl, safeShader, true);
-          if (success) {
-            setUsingSafeMode(true);
-          }
-        }
-
-        if (!success) {
-          setGlError('Failed to initialize shaders');
-          return;
-        }
-
-        // Render loop
-        const render = () => {
-          if (!mountedRef.current) return;
-
-          // Skip rendering if paused (but keep the loop alive)
-          if (!isRenderingRef.current) {
-            rafRef.current = requestAnimationFrame(render);
-            return;
-          }
-
-          try {
-            const gl = glRef.current;
-            const program = programRef.current;
-
-            if (!gl || !program) {
-              rafRef.current = requestAnimationFrame(render);
-              return;
-            }
-
-            // Check for context loss
-            if (gl.isContextLost && gl.isContextLost()) {
-              rafRef.current = requestAnimationFrame(render);
-              return;
-            }
-
-            const time = (Date.now() - startTimeRef.current) / 1000;
-            const analysis = analysisRef.current;
-            const sens = sensitivityRef.current;
-
-            gl.viewport(0, 0, gl.drawingBufferWidth, gl.drawingBufferHeight);
-            gl.clearColor(0, 0, 0, 1);
-            gl.clear(gl.COLOR_BUFFER_BIT);
-
-            gl.useProgram(program);
-
-            // Set uniforms safely
-            const timeLocation = gl.getUniformLocation(program, 'time');
-            const resolutionLocation = gl.getUniformLocation(program, 'resolution');
-            const bassLocation = gl.getUniformLocation(program, 'bass');
-            const midLocation = gl.getUniformLocation(program, 'mid');
-            const trebleLocation = gl.getUniformLocation(program, 'treble');
-
-            if (timeLocation !== null) gl.uniform1f(timeLocation, time);
-            if (resolutionLocation !== null) {
-              gl.uniform2f(resolutionLocation, gl.drawingBufferWidth, gl.drawingBufferHeight);
-            }
-            if (bassLocation !== null) gl.uniform1f(bassLocation, analysis.bass * sens);
-            if (midLocation !== null) gl.uniform1f(midLocation, analysis.mid * sens);
-            if (trebleLocation !== null) gl.uniform1f(trebleLocation, analysis.treble * sens);
-
-            gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
-            gl.endFrameEXP();
-
-            rafRef.current = requestAnimationFrame(render);
-          } catch (error) {
-            console.warn('Render error:', error);
-            rafRef.current = requestAnimationFrame(render);
-          }
-        };
-
-        render();
-      } catch (error) {
-        console.error('Context creation error:', error);
-        setGlError('Failed to initialize WebGL');
-      }
-    },
-    [setupProgram]
-  );
-
-  // Cleanup on unmount
+  // Delay GL initialization on Android to avoid crashes during screen transitions
   useEffect(() => {
     mountedRef.current = true;
-    isRenderingRef.current = true;
+
+    const delay = Platform.OS === 'android' ? 500 : 100;
+    const timer = setTimeout(() => {
+      if (mountedRef.current) {
+        setIsReady(true);
+      }
+    }, delay);
 
     return () => {
       mountedRef.current = false;
-      isRenderingRef.current = false;
+      clearTimeout(timer);
+    };
+  }, []);
 
+  // Handle app state
+  useEffect(() => {
+    const handleAppStateChange = (state: AppStateStatus) => {
+      isActiveRef.current = state === 'active';
+    };
+
+    const sub = AppState.addEventListener('change', handleAppStateChange);
+    return () => sub.remove();
+  }, []);
+
+  // Cleanup
+  useEffect(() => {
+    return () => {
       if (rafRef.current) {
         cancelAnimationFrame(rafRef.current);
         rafRef.current = null;
       }
-
-      cleanupGL();
     };
-  }, [cleanupGL]);
+  }, []);
 
-  if (glError) {
+  const onContextCreate = useCallback((gl: ExpoWebGLRenderingContext) => {
+    if (!mountedRef.current) return;
+
+    try {
+      glRef.current = gl;
+
+      // Create vertex shader
+      const vs = gl.createShader(gl.VERTEX_SHADER);
+      if (!vs) {
+        throw new Error('Failed to create vertex shader');
+      }
+      gl.shaderSource(vs, VERTEX_SHADER);
+      gl.compileShader(vs);
+      if (!gl.getShaderParameter(vs, gl.COMPILE_STATUS)) {
+        const log = gl.getShaderInfoLog(vs);
+        gl.deleteShader(vs);
+        throw new Error('Vertex shader error: ' + log);
+      }
+
+      // Create fragment shader
+      const fs = gl.createShader(gl.FRAGMENT_SHADER);
+      if (!fs) {
+        gl.deleteShader(vs);
+        throw new Error('Failed to create fragment shader');
+      }
+      gl.shaderSource(fs, SIMPLE_FRAGMENT_SHADER);
+      gl.compileShader(fs);
+      if (!gl.getShaderParameter(fs, gl.COMPILE_STATUS)) {
+        const log = gl.getShaderInfoLog(fs);
+        gl.deleteShader(vs);
+        gl.deleteShader(fs);
+        throw new Error('Fragment shader error: ' + log);
+      }
+
+      // Create program
+      const program = gl.createProgram();
+      if (!program) {
+        gl.deleteShader(vs);
+        gl.deleteShader(fs);
+        throw new Error('Failed to create program');
+      }
+
+      gl.attachShader(program, vs);
+      gl.attachShader(program, fs);
+      gl.linkProgram(program);
+
+      if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
+        const log = gl.getProgramInfoLog(program);
+        gl.deleteShader(vs);
+        gl.deleteShader(fs);
+        gl.deleteProgram(program);
+        throw new Error('Program link error: ' + log);
+      }
+
+      gl.deleteShader(vs);
+      gl.deleteShader(fs);
+      programRef.current = program;
+
+      // Setup geometry
+      const buffer = gl.createBuffer();
+      gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
+      gl.bufferData(
+        gl.ARRAY_BUFFER,
+        new Float32Array([-1, -1, 1, -1, -1, 1, 1, 1]),
+        gl.STATIC_DRAW
+      );
+
+      const pos = gl.getAttribLocation(program, 'position');
+      gl.enableVertexAttribArray(pos);
+      gl.vertexAttribPointer(pos, 2, gl.FLOAT, false, 0, 0);
+
+      // Render loop
+      const render = () => {
+        if (!mountedRef.current) return;
+
+        rafRef.current = requestAnimationFrame(render);
+
+        if (!isActiveRef.current || !glRef.current || !programRef.current) {
+          return;
+        }
+
+        try {
+          const gl = glRef.current;
+          const program = programRef.current;
+
+          if (gl.isContextLost?.()) return;
+
+          const time = (Date.now() - startTimeRef.current) / 1000;
+          const data = analysisRef.current;
+          const sens = sensitivityRef.current;
+
+          gl.viewport(0, 0, gl.drawingBufferWidth, gl.drawingBufferHeight);
+          gl.clearColor(0, 0, 0, 1);
+          gl.clear(gl.COLOR_BUFFER_BIT);
+          gl.useProgram(program);
+
+          const timeLoc = gl.getUniformLocation(program, 'time');
+          const bassLoc = gl.getUniformLocation(program, 'bass');
+          const midLoc = gl.getUniformLocation(program, 'mid');
+          const trebleLoc = gl.getUniformLocation(program, 'treble');
+
+          if (timeLoc) gl.uniform1f(timeLoc, time);
+          if (bassLoc) gl.uniform1f(bassLoc, data.bass * sens);
+          if (midLoc) gl.uniform1f(midLoc, data.mid * sens);
+          if (trebleLoc) gl.uniform1f(trebleLoc, data.treble * sens);
+
+          gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+          gl.endFrameEXP();
+        } catch (e) {
+          // Silently continue on render errors
+        }
+      };
+
+      render();
+    } catch (error: any) {
+      console.error('GL initialization failed:', error);
+      setHasError(true);
+      setErrorMessage(error?.message || 'Unknown GL error');
+    }
+  }, []);
+
+  if (hasError) {
     return (
       <View style={styles.errorContainer}>
         <Text style={styles.errorText}>Visualizer unavailable</Text>
-        <Text style={styles.errorSubtext}>{glError}</Text>
+        <Text style={styles.errorSubtext}>{errorMessage}</Text>
       </View>
     );
+  }
+
+  if (!isReady) {
+    return <View style={styles.container} />;
   }
 
   return (
@@ -405,11 +243,6 @@ export const GLVisualizer: React.FC<GLVisualizerProps> = ({
         onContextCreate={onContextCreate}
         msaaSamples={0}
       />
-      {usingSafeMode && (
-        <View style={styles.safeModeIndicator}>
-          <Text style={styles.safeModeText}>SAFE MODE</Text>
-        </View>
-      )}
     </View>
   );
 };
@@ -436,19 +269,7 @@ const styles = StyleSheet.create({
   errorSubtext: {
     color: '#6B7280',
     fontSize: 12,
-  },
-  safeModeIndicator: {
-    position: 'absolute',
-    top: 10,
-    right: 10,
-    backgroundColor: 'rgba(255, 165, 0, 0.3)',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 4,
-  },
-  safeModeText: {
-    color: '#FFA500',
-    fontSize: 10,
-    fontWeight: 'bold',
+    textAlign: 'center',
+    paddingHorizontal: 20,
   },
 });
