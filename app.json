@@ -23,12 +23,8 @@
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#111827"
       },
-      "package": "com.podracer.app",
-      "hardwareAccelerated": true
+      "package": "com.podracer.app"
     },
-    "plugins": [
-      "expo-gl"
-    ],
     "web": {
       "favicon": "./assets/favicon.png"
     },

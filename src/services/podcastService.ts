@@ -9,8 +9,9 @@ import { parseDuration } from '../utils/timeUtils';
 import * as storageService from './storageService';
 
 const ITUNES_SEARCH_URL = 'https://itunes.apple.com/search';
-// User-Agent for podcast analytics - identifies as Podracer to search services
-const USER_AGENT = 'Podracer/1.0 (Podcast Player; https://podracer.app)';
+// User-Agent for podcast analytics - standard format recognized by podcast stats services
+// Format follows: AppName/Version (+URL) as recommended by podcast analytics platforms
+const USER_AGENT = 'Podracer/1.0.0 (+https://podracer.app; podcast player)';
 
 export const searchPodcasts = async (
   query: string,

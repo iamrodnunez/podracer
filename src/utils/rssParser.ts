@@ -8,8 +8,9 @@ const parser = new XMLParser({
   textNodeName: '#text',
 });
 
-// User-Agent for podcast analytics - identifies as Podracer to feed services
-const USER_AGENT = 'Podracer/1.0 (Podcast Player; https://podracer.app)';
+// User-Agent for podcast analytics - standard format recognized by podcast stats services
+// Format follows: AppName/Version (+URL) as recommended by podcast analytics platforms
+const USER_AGENT = 'Podracer/1.0.0 (+https://podracer.app; podcast player)';
 
 export const parseRSSFeed = async (feedUrl: string): Promise<RSSFeed> => {
   try {
