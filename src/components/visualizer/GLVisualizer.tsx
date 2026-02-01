@@ -1,62 +1,39 @@
 import React, { useCallback, useRef, useEffect, useState } from 'react';
-import { View, StyleSheet, Dimensions, Platform, Text, AppState, AppStateStatus } from 'react-native';
-import { GLView, ExpoWebGLRenderingContext } from 'expo-gl';
+import { View, StyleSheet, Dimensions, Platform, Text, AppState } from 'react-native';
 import { useAudioAnalysis } from '../../hooks/useAudioAnalysis';
 import { useSettingsStore } from '../../store/useSettingsStore';
-import { shaderPresets, getPresetById, safeShader } from '../../shaders/presets';
-import { ShaderPreset } from '../../types/visualization';
+
+// Dynamically import GLView to catch import errors
+let GLView: any = null;
+let glImportError: string | null = null;
+
+try {
+  GLView = require('expo-gl').GLView;
+} catch (e: any) {
+  glImportError = e?.message || 'Failed to import expo-gl';
+}
 
 interface GLVisualizerProps {
   presetId?: string;
-  onPresetChange?: (preset: ShaderPreset) => void;
+  onPresetChange?: (preset: any) => void;
 }
 
-// Ultra-simple vertex shader
-const VERTEX_SHADER = `
-attribute vec2 position;
-void main() {
-  gl_Position = vec4(position, 0.0, 1.0);
-}
-`;
-
-// Ultra-simple fragment shader - guaranteed to work on any GLES 2.0 device
-const SIMPLE_FRAGMENT_SHADER = `
-precision lowp float;
-uniform float time;
-uniform float bass;
-uniform float mid;
-uniform float treble;
-
-void main() {
-  float r = 0.3 + bass * 0.5 + sin(time) * 0.2;
-  float g = 0.2 + mid * 0.4 + sin(time * 1.3) * 0.15;
-  float b = 0.5 + treble * 0.3 + sin(time * 0.7) * 0.2;
-  gl_FragColor = vec4(r, g, b, 1.0);
-}
-`;
-
-export const GLVisualizer: React.FC<GLVisualizerProps> = ({
-  presetId,
-  onPresetChange,
-}) => {
+export const GLVisualizer: React.FC<GLVisualizerProps> = () => {
   const analysisData = useAudioAnalysis();
   const sensitivity = useSettingsStore((state) => state.visualizer.sensitivity);
   const [dimensions] = useState(() => Dimensions.get('window'));
   const [isReady, setIsReady] = useState(false);
-  const [hasError, setHasError] = useState(false);
-  const [errorMessage, setErrorMessage] = useState('');
+  const [error, setError] = useState<string | null>(glImportError);
+  const [glInfo, setGlInfo] = useState<string>('');
 
-  // Refs
-  const glRef = useRef<ExpoWebGLRenderingContext | null>(null);
+  const glRef = useRef<any>(null);
   const programRef = useRef<WebGLProgram | null>(null);
   const rafRef = useRef<number | null>(null);
-  const startTimeRef = useRef<number>(Date.now());
+  const mountedRef = useRef(true);
+  const startTimeRef = useRef(Date.now());
   const analysisRef = useRef(analysisData);
   const sensitivityRef = useRef(sensitivity);
-  const mountedRef = useRef(true);
-  const isActiveRef = useRef(true);
 
-  // Update refs
   useEffect(() => {
     analysisRef.current = analysisData;
   }, [analysisData]);
@@ -65,11 +42,16 @@ export const GLVisualizer: React.FC<GLVisualizerProps> = ({
     sensitivityRef.current = sensitivity;
   }, [sensitivity]);
 
-  // Delay GL initialization on Android to avoid crashes during screen transitions
+  // Longer delay on Android before showing GLView
   useEffect(() => {
     mountedRef.current = true;
 
-    const delay = Platform.OS === 'android' ? 500 : 100;
+    if (glImportError) {
+      setError(glImportError);
+      return;
+    }
+
+    const delay = Platform.OS === 'android' ? 1000 : 200;
     const timer = setTimeout(() => {
       if (mountedRef.current) {
         setIsReady(true);
@@ -79,99 +61,87 @@ export const GLVisualizer: React.FC<GLVisualizerProps> = ({
     return () => {
       mountedRef.current = false;
       clearTimeout(timer);
-    };
-  }, []);
-
-  // Handle app state
-  useEffect(() => {
-    const handleAppStateChange = (state: AppStateStatus) => {
-      isActiveRef.current = state === 'active';
-    };
-
-    const sub = AppState.addEventListener('change', handleAppStateChange);
-    return () => sub.remove();
-  }, []);
-
-  // Cleanup
-  useEffect(() => {
-    return () => {
       if (rafRef.current) {
         cancelAnimationFrame(rafRef.current);
-        rafRef.current = null;
       }
     };
   }, []);
 
-  const onContextCreate = useCallback((gl: ExpoWebGLRenderingContext) => {
-    if (!mountedRef.current) return;
+  const onContextCreate = useCallback((gl: any) => {
+    if (!mountedRef.current || !gl) {
+      setError('GL context not available');
+      return;
+    }
 
     try {
       glRef.current = gl;
 
-      // Create vertex shader
+      // Log GL info
+      const vendor = gl.getParameter(gl.VENDOR) || 'unknown';
+      const renderer = gl.getParameter(gl.RENDERER) || 'unknown';
+      const version = gl.getParameter(gl.VERSION) || 'unknown';
+      setGlInfo(`${renderer}`);
+      console.log(`GL: ${vendor} | ${renderer} | ${version}`);
+
+      // Minimal vertex shader
+      const vsSource = `
+        attribute vec4 pos;
+        void main() { gl_Position = pos; }
+      `;
+
+      // Minimal fragment shader - just audio-reactive color
+      const fsSource = `
+        precision lowp float;
+        uniform float t;
+        uniform float b;
+        uniform float m;
+        uniform float h;
+        void main() {
+          float r = 0.2 + b * 0.6 + sin(t) * 0.1;
+          float g = 0.1 + m * 0.5 + sin(t * 1.3) * 0.1;
+          float b2 = 0.4 + h * 0.4 + sin(t * 0.7) * 0.1;
+          gl_FragColor = vec4(r, g, b2, 1.0);
+        }
+      `;
+
+      // Create shaders
       const vs = gl.createShader(gl.VERTEX_SHADER);
-      if (!vs) {
-        throw new Error('Failed to create vertex shader');
-      }
-      gl.shaderSource(vs, VERTEX_SHADER);
+      gl.shaderSource(vs, vsSource);
       gl.compileShader(vs);
       if (!gl.getShaderParameter(vs, gl.COMPILE_STATUS)) {
-        const log = gl.getShaderInfoLog(vs);
-        gl.deleteShader(vs);
-        throw new Error('Vertex shader error: ' + log);
+        throw new Error('VS: ' + gl.getShaderInfoLog(vs));
       }
 
-      // Create fragment shader
       const fs = gl.createShader(gl.FRAGMENT_SHADER);
-      if (!fs) {
-        gl.deleteShader(vs);
-        throw new Error('Failed to create fragment shader');
-      }
-      gl.shaderSource(fs, SIMPLE_FRAGMENT_SHADER);
+      gl.shaderSource(fs, fsSource);
       gl.compileShader(fs);
       if (!gl.getShaderParameter(fs, gl.COMPILE_STATUS)) {
-        const log = gl.getShaderInfoLog(fs);
-        gl.deleteShader(vs);
-        gl.deleteShader(fs);
-        throw new Error('Fragment shader error: ' + log);
+        throw new Error('FS: ' + gl.getShaderInfoLog(fs));
       }
 
       // Create program
-      const program = gl.createProgram();
-      if (!program) {
-        gl.deleteShader(vs);
-        gl.deleteShader(fs);
-        throw new Error('Failed to create program');
-      }
-
-      gl.attachShader(program, vs);
-      gl.attachShader(program, fs);
-      gl.linkProgram(program);
-
-      if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
-        const log = gl.getProgramInfoLog(program);
-        gl.deleteShader(vs);
-        gl.deleteShader(fs);
-        gl.deleteProgram(program);
-        throw new Error('Program link error: ' + log);
+      const prog = gl.createProgram();
+      gl.attachShader(prog, vs);
+      gl.attachShader(prog, fs);
+      gl.linkProgram(prog);
+      if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) {
+        throw new Error('Link: ' + gl.getProgramInfoLog(prog));
       }
 
       gl.deleteShader(vs);
       gl.deleteShader(fs);
-      programRef.current = program;
+      programRef.current = prog;
 
-      // Setup geometry
-      const buffer = gl.createBuffer();
-      gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
-      gl.bufferData(
-        gl.ARRAY_BUFFER,
-        new Float32Array([-1, -1, 1, -1, -1, 1, 1, 1]),
-        gl.STATIC_DRAW
-      );
+      // Setup quad
+      const buf = gl.createBuffer();
+      gl.bindBuffer(gl.ARRAY_BUFFER, buf);
+      gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([
+        -1, -1, 1, -1, -1, 1, 1, 1
+      ]), gl.STATIC_DRAW);
 
-      const pos = gl.getAttribLocation(program, 'position');
-      gl.enableVertexAttribArray(pos);
-      gl.vertexAttribPointer(pos, 2, gl.FLOAT, false, 0, 0);
+      const posLoc = gl.getAttribLocation(prog, 'pos');
+      gl.enableVertexAttribArray(posLoc);
+      gl.vertexAttribPointer(posLoc, 2, gl.FLOAT, false, 0, 0);
 
       // Render loop
       const render = () => {
@@ -179,70 +149,72 @@ export const GLVisualizer: React.FC<GLVisualizerProps> = ({
 
         rafRef.current = requestAnimationFrame(render);
 
-        if (!isActiveRef.current || !glRef.current || !programRef.current) {
-          return;
-        }
+        const gl = glRef.current;
+        const prog = programRef.current;
+        if (!gl || !prog) return;
 
         try {
-          const gl = glRef.current;
-          const program = programRef.current;
-
           if (gl.isContextLost?.()) return;
 
-          const time = (Date.now() - startTimeRef.current) / 1000;
+          const t = (Date.now() - startTimeRef.current) / 1000;
           const data = analysisRef.current;
           const sens = sensitivityRef.current;
 
           gl.viewport(0, 0, gl.drawingBufferWidth, gl.drawingBufferHeight);
           gl.clearColor(0, 0, 0, 1);
           gl.clear(gl.COLOR_BUFFER_BIT);
-          gl.useProgram(program);
+          gl.useProgram(prog);
 
-          const timeLoc = gl.getUniformLocation(program, 'time');
-          const bassLoc = gl.getUniformLocation(program, 'bass');
-          const midLoc = gl.getUniformLocation(program, 'mid');
-          const trebleLoc = gl.getUniformLocation(program, 'treble');
+          const tLoc = gl.getUniformLocation(prog, 't');
+          const bLoc = gl.getUniformLocation(prog, 'b');
+          const mLoc = gl.getUniformLocation(prog, 'm');
+          const hLoc = gl.getUniformLocation(prog, 'h');
 
-          if (timeLoc) gl.uniform1f(timeLoc, time);
-          if (bassLoc) gl.uniform1f(bassLoc, data.bass * sens);
-          if (midLoc) gl.uniform1f(midLoc, data.mid * sens);
-          if (trebleLoc) gl.uniform1f(trebleLoc, data.treble * sens);
+          if (tLoc) gl.uniform1f(tLoc, t);
+          if (bLoc) gl.uniform1f(bLoc, data.bass * sens);
+          if (mLoc) gl.uniform1f(mLoc, data.mid * sens);
+          if (hLoc) gl.uniform1f(hLoc, data.treble * sens);
 
           gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
           gl.endFrameEXP();
         } catch (e) {
-          // Silently continue on render errors
+          // Silent fail on render errors
         }
       };
 
       render();
-    } catch (error: any) {
-      console.error('GL initialization failed:', error);
-      setHasError(true);
-      setErrorMessage(error?.message || 'Unknown GL error');
+    } catch (e: any) {
+      console.error('GL Error:', e);
+      setError(e?.message || 'GL initialization failed');
     }
   }, []);
 
-  if (hasError) {
+  if (error) {
     return (
       <View style={styles.errorContainer}>
-        <Text style={styles.errorText}>Visualizer unavailable</Text>
-        <Text style={styles.errorSubtext}>{errorMessage}</Text>
+        <Text style={styles.errorText}>Visualizer Error</Text>
+        <Text style={styles.errorDetail}>{error}</Text>
       </View>
     );
   }
 
-  if (!isReady) {
+  if (!isReady || !GLView) {
     return <View style={styles.container} />;
   }
 
   return (
     <View style={styles.container}>
       <GLView
-        style={[styles.glView, { width: dimensions.width, height: dimensions.height }]}
+        style={[styles.gl, { width: dimensions.width, height: dimensions.height }]}
         onContextCreate={onContextCreate}
         msaaSamples={0}
+        enableExperimentalWorkletSupport={false}
       />
+      {glInfo ? (
+        <View style={styles.info}>
+          <Text style={styles.infoText}>{glInfo}</Text>
+        </View>
+      ) : null}
     </View>
   );
 };
@@ -252,7 +224,7 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#000',
   },
-  glView: {
+  gl: {
     flex: 1,
   },
   errorContainer: {
@@ -260,16 +232,29 @@ const styles = StyleSheet.create({
     backgroundColor: '#000',
     alignItems: 'center',
     justifyContent: 'center',
+    padding: 20,
   },
   errorText: {
-    color: '#fff',
+    color: '#ff6b6b',
     fontSize: 16,
-    marginBottom: 8,
+    fontWeight: 'bold',
+    marginBottom: 10,
   },
-  errorSubtext: {
-    color: '#6B7280',
+  errorDetail: {
+    color: '#888',
     fontSize: 12,
     textAlign: 'center',
-    paddingHorizontal: 20,
+  },
+  info: {
+    position: 'absolute',
+    bottom: 10,
+    left: 10,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    padding: 4,
+    borderRadius: 4,
+  },
+  infoText: {
+    color: '#666',
+    fontSize: 10,
   },
 });
