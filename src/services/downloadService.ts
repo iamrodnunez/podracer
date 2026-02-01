@@ -2,11 +2,9 @@ import * as FileSystem from 'expo-file-system/legacy';
 import { Episode } from '../types/podcast';
 import * as storageService from './storageService';
 import { usePodcastStore } from '../store/usePodcastStore';
+import { USER_AGENT } from '../constants';
 
 const DOWNLOAD_DIRECTORY = `${FileSystem.documentDirectory}podcasts/`;
-// User-Agent for podcast analytics - follows OPAWG standard format
-// Pattern: AppName/Version (matches ^Podracer/ in user-agents-v2 database)
-const USER_AGENT = 'Podracer/1.0.0';
 
 interface DownloadProgress {
   episodeId: string;

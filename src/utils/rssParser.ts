@@ -1,16 +1,13 @@
 import { XMLParser } from 'fast-xml-parser';
 import { RSSFeed, RSSItem, Chapter } from '../types/podcast';
 import { parseDuration } from './timeUtils';
+import { USER_AGENT } from '../constants';
 
 const parser = new XMLParser({
   ignoreAttributes: false,
   attributeNamePrefix: '@_',
   textNodeName: '#text',
 });
-
-// User-Agent for podcast analytics - follows OPAWG standard format
-// Pattern: AppName/Version (matches ^Podracer/ in user-agents-v2 database)
-const USER_AGENT = 'Podracer/1.0.0';
 
 export const parseRSSFeed = async (feedUrl: string): Promise<RSSFeed> => {
   try {

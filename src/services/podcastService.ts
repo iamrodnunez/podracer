@@ -7,11 +7,9 @@ import {
 } from '../utils/rssParser';
 import { parseDuration } from '../utils/timeUtils';
 import * as storageService from './storageService';
+import { USER_AGENT } from '../constants';
 
 const ITUNES_SEARCH_URL = 'https://itunes.apple.com/search';
-// User-Agent for podcast analytics - follows OPAWG standard format
-// Pattern: AppName/Version (matches ^Podracer/ in user-agents-v2 database)
-const USER_AGENT = 'Podracer/1.0.0';
 
 export const searchPodcasts = async (
   query: string,
