@@ -46,11 +46,11 @@ A React Native podcast player with real-time WebGL shader visualizations that re
 |-----------|------------|
 | Framework | React Native + Expo |
 | Language | TypeScript |
-| Audio | expo-av |
+| Audio | react-native-track-player |
 | Storage | expo-sqlite + expo-file-system |
 | State | Zustand |
 | Navigation | React Navigation |
-| Visualizations | expo-gl + GLSL shaders |
+| Visualizations | WebView + WebGL shaders |
 | RSS Parsing | fast-xml-parser |
 | Podcast Search | iTunes Search API |
 
@@ -91,7 +91,37 @@ npx expo start
 
 ### Building APK
 
-To build an Android APK:
+#### Local Build (Recommended)
+
+1. Install prerequisites:
+```bash
+# Install Android SDK (macOS)
+brew install --cask android-commandlinetools
+
+# Install Java 17
+brew install openjdk@17
+
+# Accept SDK licenses and install required packages
+ANDROID_HOME=/opt/homebrew/share/android-commandlinetools sdkmanager --licenses
+ANDROID_HOME=/opt/homebrew/share/android-commandlinetools sdkmanager "platform-tools" "platforms;android-34" "build-tools;34.0.0"
+```
+
+2. Generate native project:
+```bash
+npx expo prebuild
+```
+
+3. Build the APK:
+```bash
+cd android
+JAVA_HOME=/opt/homebrew/opt/openjdk@17/libexec/openjdk.jdk/Contents/Home \
+ANDROID_HOME=/opt/homebrew/share/android-commandlinetools \
+./gradlew assembleRelease
+```
+
+4. Find APK at: `android/app/build/outputs/apk/release/app-release.apk`
+
+#### EAS Build (Cloud)
 
 ```bash
 npx eas-cli build --platform android --profile preview
@@ -143,7 +173,7 @@ npx eas-cli build --platform android --profile preview
 
 ## Download
 
-[Download APK for Android](https://expo.dev/artifacts/eas/9qzZUjN1HPiQtuEssjv8NJ.apk)
+Build the APK locally using the instructions above, or check the [Releases](https://github.com/iamrodnunez/podracer/releases) page for pre-built APKs.
 
 ## License
 

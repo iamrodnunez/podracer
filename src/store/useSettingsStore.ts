@@ -43,11 +43,11 @@ interface SettingsState {
 
 const defaultVisualizerSettings: VisualizerSettings = {
   enabled: true,
-  currentPresetId: 'geometric_fractal',
+  currentPresetId: 'tunnel',
   autoTransition: true,
   transitionInterval: 30,
   beatTriggeredTransition: false,
-  sensitivity: 0.7,
+  sensitivity: 1.2,
 };
 
 export const useSettingsStore = create<SettingsState>((set) => ({

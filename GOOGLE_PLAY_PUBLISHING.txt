@@ -1,0 +1,172 @@
+===============================================================================
+                    PODRACER - GOOGLE PLAY STORE PUBLISHING GUIDE
+===============================================================================
+
+1. GOOGLE PLAY DEVELOPER ACCOUNT
+-------------------------------------------------------------------------------
+- One-time $25 registration fee
+- Sign up at: https://play.google.com/console
+- You'll need a Google account
+
+
+2. CREATE A SIGNING KEY (Do this once - KEEP IT SAFE!)
+-------------------------------------------------------------------------------
+Run this command to generate your release keystore:
+
+    keytool -genkey -v -keystore podracer-release.keystore -alias podracer -keyalg RSA -keysize 2048 -validity 10000
+
+You'll be prompted for:
+- Keystore password (remember this!)
+- Your name, organization, city, state, country
+- Key password (can be same as keystore password)
+
+IMPORTANT:
+- Store the keystore file securely (NOT in git!)
+- If you lose it, you cannot update your app on Play Store
+- Back it up in multiple secure locations
+
+
+3. CONFIGURE SIGNING IN YOUR PROJECT
+-------------------------------------------------------------------------------
+a) Move the keystore file to: android/app/podracer-release.keystore
+
+b) Add to android/gradle.properties:
+
+    MYAPP_RELEASE_STORE_FILE=podracer-release.keystore
+    MYAPP_RELEASE_KEY_ALIAS=podracer
+    MYAPP_RELEASE_STORE_PASSWORD=your_password_here
+    MYAPP_RELEASE_KEY_PASSWORD=your_password_here
+
+c) Update android/app/build.gradle, add inside 'android' block:
+
+    signingConfigs {
+        release {
+            if (project.hasProperty('MYAPP_RELEASE_STORE_FILE')) {
+                storeFile file(MYAPP_RELEASE_STORE_FILE)
+                storePassword MYAPP_RELEASE_STORE_PASSWORD
+                keyAlias MYAPP_RELEASE_KEY_ALIAS
+                keyPassword MYAPP_RELEASE_KEY_PASSWORD
+            }
+        }
+    }
+    buildTypes {
+        release {
+            signingConfig signingConfigs.release
+            minifyEnabled true
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+        }
+    }
+
+
+4. BUILD SIGNED AAB (Android App Bundle)
+-------------------------------------------------------------------------------
+Play Store requires AAB format (not APK):
+
+    cd android
+    export JAVA_HOME=/opt/homebrew/opt/openjdk@17/libexec/openjdk.jdk/Contents/Home
+    export ANDROID_HOME=/opt/homebrew/share/android-commandlinetools
+    ./gradlew bundleRelease
+
+Output will be at:
+    android/app/build/outputs/bundle/release/app-release.aab
+
+
+5. PREPARE STORE LISTING ASSETS
+-------------------------------------------------------------------------------
+Required graphics:
+- App icon: 512x512 PNG (32-bit, no alpha for main icon)
+- Feature graphic: 1024x500 PNG or JPG
+- Screenshots:
+  - Phone: minimum 2, recommended 8 (16:9 or 9:16)
+  - 7" tablet: optional but recommended
+  - 10" tablet: optional but recommended
+
+Required text:
+- App name: "Podracer" (max 30 characters)
+- Short description: max 80 characters
+  Example: "Beautiful podcast player with stunning audio visualizations"
+- Full description: max 4000 characters
+  Describe features, what makes it unique, etc.
+
+
+6. REQUIRED POLICIES
+-------------------------------------------------------------------------------
+- Privacy Policy URL (required)
+  You need a webpage with your privacy policy
+  Free options: GitHub Pages, Notion public page, Google Sites
+
+- Data Safety Section
+  Declare what data your app collects (Play Console will guide you)
+
+- Content Rating
+  Complete the IARC questionnaire in Play Console
+
+
+7. PLAY CONSOLE SETUP STEPS
+-------------------------------------------------------------------------------
+1. Log into https://play.google.com/console
+2. Click "Create app"
+3. Fill in app details:
+   - App name: Podracer
+   - Default language: English
+   - App or game: App
+   - Free or paid: Free (or Paid)
+4. Complete the "Set up your app" checklist:
+   - App access (is login required?)
+   - Ads (does it contain ads?)
+   - Content rating
+   - Target audience
+   - News app (no)
+   - COVID-19 apps (no)
+   - Data safety
+   - Government apps (no)
+5. Go to "Main store listing" and add:
+   - Screenshots
+   - Feature graphic
+   - App icon
+   - Descriptions
+6. Go to "Production" > "Create new release"
+7. Upload your .aab file
+8. Add release notes
+9. Review and submit
+
+
+8. APP REVIEW TIMELINE
+-------------------------------------------------------------------------------
+- First submission: Usually 1-3 days, can take up to 7 days
+- Updates: Usually a few hours to 1 day
+- If rejected, you'll get an email explaining why
+
+
+9. VERSION MANAGEMENT
+-------------------------------------------------------------------------------
+For updates, increment these in android/app/build.gradle:
+- versionCode: Integer, must increase each release (1, 2, 3...)
+- versionName: User-visible version string ("1.0.0", "1.1.0", etc.)
+
+
+10. USEFUL LINKS
+-------------------------------------------------------------------------------
+- Play Console: https://play.google.com/console
+- Play Console Help: https://support.google.com/googleplay/android-developer
+- App content policies: https://play.google.com/about/developer-content-policy/
+- Launch checklist: https://developer.android.com/distribute/best-practices/launch/launch-checklist
+
+
+===============================================================================
+                              QUICK REFERENCE
+===============================================================================
+
+Build signed AAB:
+    cd android && ./gradlew bundleRelease
+
+AAB location:
+    android/app/build/outputs/bundle/release/app-release.aab
+
+Build signed APK (for testing):
+    cd android && ./gradlew assembleRelease
+
+APK location:
+    android/app/build/outputs/apk/release/app-release.apk
+
+===============================================================================

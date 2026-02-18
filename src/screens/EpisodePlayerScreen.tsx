@@ -291,8 +291,8 @@ const styles = StyleSheet.create({
     marginBottom: 24,
   },
   artwork: {
-    width: 340,
-    height: 340,
+    width: 380,
+    height: 380,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 8 },
     shadowOpacity: 0.5,
@@ -300,8 +300,8 @@ const styles = StyleSheet.create({
     elevation: 10,
   },
   artworkPlaceholder: {
-    width: 340,
-    height: 340,
+    width: 380,
+    height: 380,
     backgroundColor: '#1F2937',
     alignItems: 'center',
     justifyContent: 'center',
@@ -318,6 +318,11 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     borderWidth: 1,
     borderColor: '#374151',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 3,
+    elevation: 2,
   },
   visualizerHintText: {
     color: '#6B7280',
@@ -351,6 +356,12 @@ const styles = StyleSheet.create({
   },
   extraButton: {
     alignItems: 'center',
+    padding: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 3,
+    elevation: 3,
   },
   notesIcon: {
     width: 24,
@@ -425,6 +436,11 @@ const styles = StyleSheet.create({
     marginBottom: 4,
     borderWidth: 1,
     borderColor: 'transparent',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.15,
+    shadowRadius: 2,
+    elevation: 2,
   },
   modalOptionActive: {
     backgroundColor: '#FFFFFF',

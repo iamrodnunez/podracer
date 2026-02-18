@@ -1,4 +1,9 @@
-import { Audio } from 'expo-av';
+import TrackPlayer, {
+  State,
+  Capability,
+  RepeatMode,
+  Event,
+} from 'react-native-track-player';
 import { AppState, AppStateStatus } from 'react-native';
 import { Episode, Podcast } from '../types/podcast';
 import { usePlayerStore } from '../store/usePlayerStore';
@@ -8,22 +13,71 @@ import * as storageService from './storageService';
 import * as downloadService from './downloadService';
 import * as podcastService from './podcastService';
 
-let sound: Audio.Sound | null = null;
 let isServiceInitialized = false;
 let positionSaveInterval: NodeJS.Timeout | null = null;
 let appStateSubscription: ReturnType<typeof AppState.addEventListener> | null = null;
+let playbackStateSubscription: any = null;
 
 export const setupPlayer = async (): Promise<boolean> => {
   if (isServiceInitialized) return true;
 
   try {
-    await Audio.setAudioModeAsync({
-      allowsRecordingIOS: false,
-      staysActiveInBackground: true,
-      playsInSilentModeIOS: true,
-      shouldDuckAndroid: true,
-      playThroughEarpieceAndroid: false,
+    // Check if already initialized
+    try {
+      await TrackPlayer.getActiveTrack();
+      isServiceInitialized = true;
+      return true;
+    } catch {
+      // Not initialized, continue with setup
+    }
+
+    await TrackPlayer.setupPlayer({
+      waitForBuffer: true,
     });
+
+    await TrackPlayer.updateOptions({
+      capabilities: [
+        Capability.Play,
+        Capability.Pause,
+        Capability.Stop,
+        Capability.SeekTo,
+        Capability.JumpForward,
+        Capability.JumpBackward,
+      ],
+      compactCapabilities: [
+        Capability.Play,
+        Capability.Pause,
+        Capability.JumpForward,
+        Capability.JumpBackward,
+      ],
+      forwardJumpInterval: 30,
+      backwardJumpInterval: 15,
+      progressUpdateEventInterval: 1,
+      notificationCapabilities: [
+        Capability.Play,
+        Capability.Pause,
+        Capability.JumpForward,
+        Capability.JumpBackward,
+      ],
+      // Android notification customization
+      android: {
+        appKilledPlaybackBehavior: 'pause' as any,
+      },
+    });
+
+    await TrackPlayer.setRepeatMode(RepeatMode.Off);
+
+    // Subscribe to playback state changes
+    playbackStateSubscription = TrackPlayer.addEventListener(
+      Event.PlaybackState,
+      onPlaybackStateChange
+    );
+
+    // Subscribe to track end
+    TrackPlayer.addEventListener(Event.PlaybackQueueEnded, onTrackEnded);
+
+    // Subscribe to progress updates
+    TrackPlayer.addEventListener(Event.PlaybackProgressUpdated, onProgressUpdate);
 
     // Set up app state listener to save position when app goes to background
     appStateSubscription = AppState.addEventListener('change', handleAppStateChange);
@@ -33,6 +87,88 @@ export const setupPlayer = async (): Promise<boolean> => {
   } catch (error) {
     console.error('Error setting up player:', error);
     return false;
+  }
+};
+
+const onPlaybackStateChange = async (event: { state: State }) => {
+  const store = usePlayerStore.getState();
+
+  switch (event.state) {
+    case State.Playing:
+      store.setIsPlaying(true);
+      store.setIsLoading(false);
+      startPositionSaveInterval();
+      break;
+    case State.Paused:
+      store.setIsPlaying(false);
+      store.setIsLoading(false);
+      await saveCurrentPositionAndState();
+      break;
+    case State.Stopped:
+      store.setIsPlaying(false);
+      store.setIsLoading(false);
+      stopPositionSaveInterval();
+      break;
+    case State.Loading:
+    case State.Buffering:
+      store.setIsLoading(true);
+      break;
+    case State.Ready:
+      store.setIsLoading(false);
+      break;
+  }
+};
+
+const onProgressUpdate = async (event: { position: number; duration: number }) => {
+  const store = usePlayerStore.getState();
+  store.setCurrentTime(event.position);
+  if (event.duration > 0) {
+    store.setDuration(event.duration);
+  }
+};
+
+const onTrackEnded = async () => {
+  const store = usePlayerStore.getState();
+  const episode = store.currentEpisode;
+
+  if (episode) {
+    // Mark as played
+    await storageService.markEpisodePlayed(episode.id, true);
+
+    // Update the episode in the store
+    usePodcastStore.getState().updateEpisode(episode.id, {
+      isPlayed: true,
+      playbackPosition: 0,
+    });
+
+    // If episode was downloaded, delete the download
+    if (episode.isDownloaded && episode.downloadPath) {
+      try {
+        await downloadService.deleteDownload(episode);
+      } catch (error) {
+        console.error('Error deleting download after playback:', error);
+      }
+    }
+
+    // Remove the finished episode from queue if it's there
+    const queueStore = useQueueStore.getState();
+    queueStore.removeFromQueue(episode.id);
+
+    // Check if there's a next episode in the queue
+    const { queue } = useQueueStore.getState();
+    if (queue.length > 0) {
+      const nextEpisode = queue[0];
+      // Play next episode from queue
+      setTimeout(() => {
+        playEpisode(nextEpisode).catch((err) => {
+          console.error('Error playing next episode:', err);
+        });
+      }, 500);
+    } else {
+      // No more episodes in queue, just stop
+      store.setIsPlaying(false);
+      stopPositionSaveInterval();
+    }
   }
 };
 
@@ -61,11 +197,11 @@ const saveCurrentPositionAndState = async () => {
   const store = usePlayerStore.getState();
   const episode = store.currentEpisode;
 
-  if (episode && sound) {
+  if (episode) {
     try {
-      const status = await sound.getStatusAsync();
-      if (status.isLoaded && status.positionMillis > 0) {
-        const positionSeconds = Math.floor(status.positionMillis / 1000);
+      const progress = await TrackPlayer.getProgress();
+      if (progress.position > 0) {
+        const positionSeconds = Math.floor(progress.position);
 
         // Save to episode record
         await storageService.updateEpisodePlaybackPosition(episode.id, positionSeconds);
@@ -89,25 +225,28 @@ export const playEpisode = async (
 ): Promise<void> => {
   const playerStore = usePlayerStore.getState();
   const queueStore = useQueueStore.getState();
+  const podcastStore = usePodcastStore.getState();
   playerStore.setIsLoading(true);
 
   try {
+    // Get podcast info for metadata
+    const podcastInfo = podcast || podcastStore.podcasts.find((p) => p.id === episode.podcastId);
+
     // If there's a current episode playing that's different from the new one,
     // save its position and add it to the queue
     const currentEpisode = playerStore.currentEpisode;
-    if (currentEpisode && currentEpisode.id !== episode.id && sound) {
-      // Save the current playback position
-      const status = await sound.getStatusAsync();
-      if (status.isLoaded && status.positionMillis > 0) {
+    if (currentEpisode && currentEpisode.id !== episode.id) {
+      const progress = await TrackPlayer.getProgress();
+      if (progress.position > 0) {
         await storageService.updateEpisodePlaybackPosition(
           currentEpisode.id,
-          Math.floor(status.positionMillis / 1000)
+          Math.floor(progress.position)
         );
 
         // Update the episode object with the saved position
         const updatedCurrentEpisode = {
           ...currentEpisode,
-          playbackPosition: Math.floor(status.positionMillis / 1000),
+          playbackPosition: Math.floor(progress.position),
         };
 
         // Add to queue at the "next" position so user can easily return to it
@@ -118,26 +257,37 @@ export const playEpisode = async (
     // Remove the episode we're about to play from the queue if it's there
     queueStore.removeFromQueue(episode.id);
 
-    // Unload previous sound
-    if (sound) {
-      await sound.unloadAsync();
-      sound = null;
-    }
+    // Reset the track player queue
+    await TrackPlayer.reset();
 
     const audioUrl = episode.isDownloaded && episode.downloadPath
       ? episode.downloadPath
       : episode.audioUrl;
 
-    const { sound: newSound } = await Audio.Sound.createAsync(
-      { uri: audioUrl },
-      {
-        shouldPlay: true,
-        positionMillis: (episode.playbackPosition || 0) * 1000,
-      },
-      onPlaybackStatusUpdate
-    );
+    // Use episode artwork if available, otherwise podcast artwork
+    const artworkUrl = episode.artworkUrl || podcastInfo?.artworkUrl || undefined;
 
-    sound = newSound;
+    // Add the track
+    await TrackPlayer.add({
+      id: episode.id,
+      url: audioUrl,
+      title: episode.title,
+      artist: podcastInfo?.title || 'Unknown Podcast',
+      artwork: artworkUrl,
+      duration: episode.duration || undefined,
+    });
+
+    // Seek to saved position if any
+    if (episode.playbackPosition && episode.playbackPosition > 0) {
+      await TrackPlayer.seekTo(episode.playbackPosition);
+    }
+
+    // Set playback rate
+    await TrackPlayer.setRate(playerStore.playbackRate);
+
+    // Start playing
+    await TrackPlayer.play();
+
     playerStore.setCurrentEpisode(episode);
     playerStore.setIsPlaying(true);
 
@@ -161,87 +311,37 @@ export const playEpisode = async (
   }
 };
 
-const onPlaybackStatusUpdate = async (status: any) => {
-  const store = usePlayerStore.getState();
+export const play = async (): Promise<void> => {
+  const { currentEpisode } = usePlayerStore.getState();
 
-  if (status.isLoaded) {
-    store.setCurrentTime(status.positionMillis / 1000);
-    store.setDuration(status.durationMillis / 1000);
-    store.setIsPlaying(status.isPlaying);
-    store.setIsLoading(status.isBuffering);
+  try {
+    const activeTrack = await TrackPlayer.getActiveTrack();
 
-    if (status.didJustFinish) {
-      const episode = store.currentEpisode;
-      if (episode) {
-        // Mark as played
-        await storageService.markEpisodePlayed(episode.id, true);
+    if (activeTrack) {
+      // Track already loaded, just play
+      await TrackPlayer.play();
+      usePlayerStore.getState().setIsPlaying(true);
+      startPositionSaveInterval();
+      return;
+    }
 
-        // Update the episode in the store
-        usePodcastStore.getState().updateEpisode(episode.id, {
-          isPlayed: true,
-          playbackPosition: 0,
-        });
-
-        // If episode was downloaded, delete the download
-        if (episode.isDownloaded && episode.downloadPath) {
-          try {
-            await downloadService.deleteDownload(episode);
-          } catch (error) {
-            console.error('Error deleting download after playback:', error);
-          }
-        }
-
-        // Remove the finished episode from queue if it's there
-        const queueStore = useQueueStore.getState();
-        queueStore.removeFromQueue(episode.id);
-
-        // Check if there's a next episode in the queue
-        const { queue } = useQueueStore.getState();
-        if (queue.length > 0) {
-          const nextEpisode = queue[0];
-          // Play next episode from queue
-          // Use setTimeout to avoid issues with async in status callback
-          setTimeout(() => {
-            playEpisode(nextEpisode).catch((err) => {
-              console.error('Error playing next episode:', err);
-            });
-          }, 500);
-        } else {
-          // No more episodes in queue, just stop
-          store.setIsPlaying(false);
-          stopPositionSaveInterval();
-        }
-      } else {
-        store.setIsPlaying(false);
-      }
+    // If no active track but we have a saved episode, load and play it
+    if (currentEpisode) {
+      await playEpisode(currentEpisode);
+    }
+  } catch (error) {
+    // If error getting track, try to load the current episode
+    if (currentEpisode) {
+      await playEpisode(currentEpisode);
     }
   }
 };
 
-export const play = async (): Promise<void> => {
-  const { currentEpisode } = usePlayerStore.getState();
-
-  // If sound exists, just resume
-  if (sound) {
-    await sound.playAsync();
-    usePlayerStore.getState().setIsPlaying(true);
-    startPositionSaveInterval();
-    return;
-  }
-
-  // If no sound but we have an episode (restored state), load and play it
-  if (currentEpisode) {
-    await playEpisode(currentEpisode);
-  }
-};
-
 export const pause = async (): Promise<void> => {
-  if (sound) {
-    await sound.pauseAsync();
-    usePlayerStore.getState().setIsPlaying(false);
-    // Save position when pausing
-    await saveCurrentPositionAndState();
-  }
+  await TrackPlayer.pause();
+  usePlayerStore.getState().setIsPlaying(false);
+  // Save position when pausing
+  await saveCurrentPositionAndState();
 };
 
 export const togglePlayPause = async (): Promise<void> => {
@@ -254,36 +354,30 @@ export const togglePlayPause = async (): Promise<void> => {
 };
 
 export const seekTo = async (position: number): Promise<void> => {
-  if (sound) {
-    await sound.setPositionAsync(position * 1000);
-    usePlayerStore.getState().setCurrentTime(position);
-  }
+  await TrackPlayer.seekTo(position);
+  usePlayerStore.getState().setCurrentTime(position);
 };
 
 export const seekForward = async (seconds: number = 30): Promise<void> => {
-  const { currentTime, duration } = usePlayerStore.getState();
-  const newPosition = Math.min(currentTime + seconds, duration);
+  const progress = await TrackPlayer.getProgress();
+  const newPosition = Math.min(progress.position + seconds, progress.duration);
   await seekTo(newPosition);
 };
 
 export const seekBackward = async (seconds: number = 15): Promise<void> => {
-  const { currentTime } = usePlayerStore.getState();
-  const newPosition = Math.max(currentTime - seconds, 0);
+  const progress = await TrackPlayer.getProgress();
+  const newPosition = Math.max(progress.position - seconds, 0);
   await seekTo(newPosition);
 };
 
 export const setPlaybackRate = async (rate: number): Promise<void> => {
-  if (sound) {
-    await sound.setRateAsync(rate, true);
-    usePlayerStore.getState().setPlaybackRate(rate);
-  }
+  await TrackPlayer.setRate(rate);
+  usePlayerStore.getState().setPlaybackRate(rate);
 };
 
 export const setVolume = async (volume: number): Promise<void> => {
-  if (sound) {
-    await sound.setVolumeAsync(volume);
-    usePlayerStore.getState().setVolume(volume);
-  }
+  await TrackPlayer.setVolume(volume);
+  usePlayerStore.getState().setVolume(volume);
 };
 
 export const stop = async (): Promise<void> => {
@@ -294,20 +388,16 @@ export const stop = async (): Promise<void> => {
   stopPositionSaveInterval();
 
   // Save playback position before stopping
-  if (episode && sound) {
-    const status = await sound.getStatusAsync();
-    if (status.isLoaded) {
-      await storageService.updateEpisodePlaybackPosition(
-        episode.id,
-        Math.floor(status.positionMillis / 1000)
-      );
-    }
+  if (episode) {
+    const progress = await TrackPlayer.getProgress();
+    await storageService.updateEpisodePlaybackPosition(
+      episode.id,
+      Math.floor(progress.position)
+    );
   }
 
-  if (sound) {
-    await sound.unloadAsync();
-    sound = null;
-  }
+  await TrackPlayer.stop();
+  await TrackPlayer.reset();
 
   store.setIsPlaying(false);
 
@@ -320,30 +410,27 @@ export const stop = async (): Promise<void> => {
 };
 
 export const getProgress = async () => {
-  if (sound) {
-    const status = await sound.getStatusAsync();
-    if (status.isLoaded) {
-      return {
-        position: status.positionMillis / 1000,
-        duration: (status.durationMillis || 0) / 1000,
-      };
-    }
+  try {
+    const progress = await TrackPlayer.getProgress();
+    return {
+      position: progress.position,
+      duration: progress.duration,
+    };
+  } catch {
+    return { position: 0, duration: 0 };
   }
-  return { position: 0, duration: 0 };
 };
 
 export const saveCurrentPosition = async (): Promise<void> => {
   const store = usePlayerStore.getState();
   const episode = store.currentEpisode;
 
-  if (episode && sound) {
-    const status = await sound.getStatusAsync();
-    if (status.isLoaded) {
-      await storageService.updateEpisodePlaybackPosition(
-        episode.id,
-        Math.floor(status.positionMillis / 1000)
-      );
-    }
+  if (episode) {
+    const progress = await TrackPlayer.getProgress();
+    await storageService.updateEpisodePlaybackPosition(
+      episode.id,
+      Math.floor(progress.position)
+    );
   }
 };
 
@@ -382,10 +469,8 @@ export const clearSleepTimer = (): void => {
   usePlayerStore.getState().clearSleepTimer();
 };
 
-// Playback service placeholder (not needed for expo-av)
-export const PlaybackService = async () => {
-  // No-op for expo-av implementation
-};
+// Re-export the PlaybackService from the separate file
+export { PlaybackService } from './playbackService';
 
 // Restore playback state on app start
 export const restorePlaybackState = async (): Promise<void> => {

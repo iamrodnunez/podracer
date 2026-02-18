@@ -69,6 +69,11 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     borderWidth: 1,
     borderColor: '#374151',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 3,
+    elevation: 3,
   },
   primary: {
     backgroundColor: '#FFFFFF',
@@ -81,6 +86,8 @@ const styles = StyleSheet.create({
   ghost: {
     backgroundColor: 'transparent',
     borderColor: '#374151',
+    shadowOpacity: 0,
+    elevation: 0,
   },
   disabled: {
     opacity: 0.5,

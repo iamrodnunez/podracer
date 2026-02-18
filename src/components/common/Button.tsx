@@ -68,6 +68,11 @@ const styles = StyleSheet.create({
   base: {
     alignItems: 'center',
     justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    elevation: 4,
   },
   primary: {
     backgroundColor: '#FFFFFF',
@@ -82,6 +87,8 @@ const styles = StyleSheet.create({
   },
   ghost: {
     backgroundColor: 'transparent',
+    shadowOpacity: 0,
+    elevation: 0,
   },
   smallSize: {
     paddingVertical: 8,

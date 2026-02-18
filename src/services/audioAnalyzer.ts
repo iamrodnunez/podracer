@@ -5,7 +5,8 @@ import { usePlayerStore } from '../store/usePlayerStore';
 const FFT_SIZE = 256;
 
 // Smoothing factor (0-1, higher = smoother/slower response)
-const SMOOTHING = 0.85;
+// Lower value = more reactive to changes
+const SMOOTHING = 0.6;
 
 let previousBass = 0;
 let previousMid = 0;
@@ -45,31 +46,42 @@ const generateWaveform = (time: number, intensity: number): Float32Array => {
   return waveform;
 };
 
-// Generate spectrum data with more dramatic frequency response
+// Generate spectrum data with dynamic, audio-reactive patterns
 const generateSpectrum = (time: number, intensity: number): Float32Array => {
   const spectrum = new Float32Array(FFT_SIZE);
 
-  // Simulate beat pattern - slower for smoother pulsing
-  const beatPhase = (time * 1.2) % 1;
-  const beatIntensity = Math.pow(Math.max(0, 1 - beatPhase * 2), 2);
+  // Use multiple incommensurate frequencies for organic variation
+  // Faster frequencies = more reactive feel
+  const wave1 = Math.sin(time * 1.3) * 0.5 + 0.5;
+  const wave2 = Math.sin(time * 2.1) * 0.5 + 0.5;
+  const wave3 = Math.sin(time * 0.7) * 0.5 + 0.5;
+  const wave4 = Math.sin(time * 3.3) * 0.5 + 0.5;
+  const wave5 = Math.sin(time * 1.9) * 0.5 + 0.5;
+
+  // Add some randomness-like variation using multiple sin waves
+  const chaos = Math.sin(time * 5.7) * Math.sin(time * 3.1) * 0.5 + 0.5;
 
   for (let i = 0; i < FFT_SIZE; i++) {
     const freq = i / FFT_SIZE;
 
-    // Bass frequencies (0-10%) - strong pulsing
-    const bassRange = Math.exp(-freq * 15) * (0.8 + beatIntensity * 0.4);
+    // Bass frequencies (0-10%) - strong, punchy variation
+    const bassBase = Math.exp(-freq * 12) * 1.2;
+    const bassVar = wave1 * 0.5 + wave3 * 0.3 + chaos * 0.4;
+    const bassRange = bassBase * (0.4 + bassVar);
 
-    // Mid frequencies (10-50%) - moderate energy
+    // Mid frequencies (10-50%) - dynamic movement
     const midCenter = 0.25;
-    const midRange = Math.exp(-Math.pow((freq - midCenter) * 4, 2)) * 0.5;
+    const midBase = Math.exp(-Math.pow((freq - midCenter) * 3, 2)) * 0.8;
+    const midVar = wave2 * 0.4 + wave4 * 0.3 + wave5 * 0.2;
+    const midRange = midBase * (0.5 + midVar);
 
-    // High frequencies (50-100%) - sparkle - slower variation
-    const highRange = freq > 0.5 ? (Math.sin(time * 4 + i * 0.3) * 0.5 + 0.5) * 0.25 * (1 - freq) : 0;
+    // High frequencies (50-100%) - sparkling variation
+    const highBase = freq > 0.5 ? 0.4 * (1 - freq) : 0;
+    const highVar = (Math.sin(time * 2.3 + i * 0.3) * 0.5 + 0.5) * wave3 + chaos * 0.3;
+    const highRange = highBase * (0.4 + highVar * 0.6);
 
-    // Combine with time variation - slower and less dramatic
-    const timeVar = Math.sin(time * 1.5 + freq * 5) * 0.15 + 0.85;
-
-    spectrum[i] = (bassRange + midRange + highRange) * intensity * timeVar * 200;
+    // Combine with stronger intensity multiplier
+    spectrum[i] = (bassRange + midRange + highRange) * intensity * 280;
   }
 
   return spectrum;

@@ -5,11 +5,11 @@ import {
   StyleSheet,
   FlatList,
   TouchableOpacity,
+  Image,
 } from 'react-native';
 import { useQueueStore } from '../store/useQueueStore';
 import { usePodcastStore } from '../store/usePodcastStore';
 import { usePlayerStore } from '../store/usePlayerStore';
-import { EpisodeCard } from '../components/podcast';
 import * as audioService from '../services/audioService';
 
 export const QueueScreen: React.FC = () => {
@@ -33,28 +33,48 @@ export const QueueScreen: React.FC = () => {
 
   const renderItem = ({ item, index }: { item: any; index: number }) => {
     const isPlaying = currentEpisode?.id === item.id;
+    const podcast = podcasts.find((p) => p.id === item.podcastId);
+    const artworkUrl = item.artworkUrl || podcast?.artworkUrl;
 
     return (
-      <View style={styles.itemContainer}>
+      <TouchableOpacity
+        style={[styles.itemContainer, isPlaying && styles.itemPlaying]}
+        onPress={() => handleEpisodePress(item, index)}
+        activeOpacity={0.7}
+      >
         <View style={styles.indexContainer}>
           <Text style={[styles.index, isPlaying && styles.indexPlaying]}>
-            {isPlaying ? '▶️' : index + 1}
+            {isPlaying ? '▶' : index + 1}
           </Text>
         </View>
-        <View style={styles.episodeContainer}>
-          <EpisodeCard
-            episode={item}
-            onPress={() => handleEpisodePress(item, index)}
-            showProgress={false}
-          />
+
+        {artworkUrl ? (
+          <Image source={{ uri: artworkUrl }} style={styles.artwork} />
+        ) : (
+          <View style={[styles.artwork, styles.artworkPlaceholder]}>
+            <Text style={styles.artworkPlaceholderText}>🎙️</Text>
+          </View>
+        )}
+
+        <View style={styles.episodeInfo}>
+          <Text style={styles.episodeTitle} numberOfLines={2}>
+            {item.title}
+          </Text>
+          {podcast && (
+            <Text style={styles.podcastName} numberOfLines={1}>
+              {podcast.title}
+            </Text>
+          )}
         </View>
+
         <TouchableOpacity
           style={styles.removeButton}
           onPress={() => handleRemove(item.id)}
+          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
         >
           <Text style={styles.removeIcon}>✕</Text>
         </TouchableOpacity>
-      </View>
+      </TouchableOpacity>
     );
   };
 
@@ -120,11 +140,20 @@ const styles = StyleSheet.create({
   itemContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 8,
+    marginBottom: 12,
+    backgroundColor: '#1F2937',
+    borderRadius: 8,
+    padding: 12,
+  },
+  itemPlaying: {
+    backgroundColor: '#374151',
+    borderWidth: 1,
+    borderColor: '#4B5563',
   },
   indexContainer: {
-    width: 32,
+    width: 24,
     alignItems: 'center',
+    marginRight: 8,
   },
   index: {
     color: '#6B7280',
@@ -134,8 +163,32 @@ const styles = StyleSheet.create({
   indexPlaying: {
     color: '#FFFFFF',
   },
-  episodeContainer: {
+  artwork: {
+    width: 50,
+    height: 50,
+    borderRadius: 6,
+    marginRight: 12,
+  },
+  artworkPlaceholder: {
+    backgroundColor: '#374151',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  artworkPlaceholderText: {
+    fontSize: 20,
+  },
+  episodeInfo: {
     flex: 1,
+  },
+  episodeTitle: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '500',
+    marginBottom: 4,
+  },
+  podcastName: {
+    color: '#9CA3AF',
+    fontSize: 12,
   },
   removeButton: {
     width: 32,
