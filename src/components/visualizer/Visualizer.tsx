@@ -1,7 +1,5 @@
 import React from 'react';
-import { Platform } from 'react-native';
-import { GLVisualizer } from './GLVisualizer';
-import { WebViewVisualizer } from './WebViewVisualizer';
+import { ButterchurnVisualizer } from './ButterchurnVisualizer';
 import { ShaderPreset } from '../../types/visualization';
 
 interface VisualizerProps {
@@ -10,13 +8,8 @@ interface VisualizerProps {
 }
 
 /**
- * Visualizer component
- * - iOS: Uses expo-gl (GLVisualizer) for best performance
- * - Android: Uses WebView-based WebGL (WebViewVisualizer) for stability
+ * Visualizer component — uses Butterchurn (MilkDrop WebGL port) on all platforms.
  */
 export const Visualizer: React.FC<VisualizerProps> = (props) => {
-  if (Platform.OS === 'android') {
-    return <WebViewVisualizer presetId={props.presetId} />;
-  }
-  return <GLVisualizer {...props} />;
+  return <ButterchurnVisualizer presetId={props.presetId} />;
 };

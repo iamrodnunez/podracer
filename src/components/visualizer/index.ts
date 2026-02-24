@@ -1,3 +1,2 @@
-export { GLVisualizer } from './GLVisualizer';
-export { WebViewVisualizer } from './WebViewVisualizer';
+export { ButterchurnVisualizer } from './ButterchurnVisualizer';
 export { Visualizer } from './Visualizer';

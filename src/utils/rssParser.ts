@@ -9,7 +9,19 @@ const parser = new XMLParser({
   textNodeName: '#text',
 });
 
+const isValidFeedUrl = (url: string): boolean => {
+  try {
+    const parsed = new URL(url);
+    return parsed.protocol === 'https:' || parsed.protocol === 'http:';
+  } catch {
+    return false;
+  }
+};
+
 export const parseRSSFeed = async (feedUrl: string): Promise<RSSFeed> => {
+  if (!isValidFeedUrl(feedUrl)) {
+    throw new Error('Invalid feed URL: only http and https are allowed');
+  }
   try {
     const response = await fetch(feedUrl, {
       headers: {

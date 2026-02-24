@@ -1,5 +1,4 @@
 import { AudioAnalysisData } from '../types/audio';
-import { calculateBands, detectBeat } from '../utils/audioUtils';
 import { usePlayerStore } from '../store/usePlayerStore';
 
 const FFT_SIZE = 256;

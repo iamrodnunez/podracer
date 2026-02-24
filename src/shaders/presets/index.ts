@@ -9,40 +9,6 @@ void main() {
 }
 `;
 
-// SAFE FALLBACK SHADER - Guaranteed to work on all devices
-// No loops, no complex math, just basic operations
-export const safeShader: ShaderPreset = {
-  id: 'safe_fallback',
-  name: 'Pulse',
-  category: 'plasma',
-  description: 'Simple reactive pulse effect',
-  vertexShader: commonVertexShader,
-  fragmentShader: `
-precision mediump float;
-uniform float time;
-uniform vec2 resolution;
-uniform float bass;
-uniform float mid;
-uniform float treble;
-
-void main() {
-  vec2 uv = gl_FragCoord.xy / resolution.xy;
-  vec2 p = uv - 0.5;
-
-  float dist = length(p);
-  float pulse = sin(dist * 10.0 - time * 2.0) * 0.5 + 0.5;
-  pulse = pulse * (1.0 - dist);
-
-  vec3 col;
-  col.r = pulse * (0.5 + bass * 0.5);
-  col.g = pulse * (0.3 + mid * 0.4);
-  col.b = pulse * (0.7 + treble * 0.3);
-
-  gl_FragColor = vec4(col, 1.0);
-}
-`,
-};
-
 // Plasma Waves - Simplified for Android (no complex trig chains)
 const plasmaWaves: ShaderPreset = {
   id: 'plasma_waves',
@@ -427,7 +393,6 @@ void main() {
 `,
 };
 
-// Export all presets with safe shader first for fallback testing
 export const shaderPresets: ShaderPreset[] = [
   plasmaWaves,
   waveformScope,
@@ -440,28 +405,5 @@ export const shaderPresets: ShaderPreset[] = [
 ];
 
 export const getPresetById = (id: string): ShaderPreset | undefined => {
-  if (id === 'safe_fallback') return safeShader;
   return shaderPresets.find((p) => p.id === id);
-};
-
-export const getPresetsByCategory = (
-  category: ShaderPreset['category']
-): ShaderPreset[] => {
-  return shaderPresets.filter((p) => p.category === category);
-};
-
-export const getRandomPreset = (): ShaderPreset => {
-  return shaderPresets[Math.floor(Math.random() * shaderPresets.length)];
-};
-
-export const getNextPreset = (currentId: string): ShaderPreset => {
-  const index = shaderPresets.findIndex((p) => p.id === currentId);
-  const nextIndex = (index + 1) % shaderPresets.length;
-  return shaderPresets[nextIndex];
-};
-
-export const getPreviousPreset = (currentId: string): ShaderPreset => {
-  const index = shaderPresets.findIndex((p) => p.id === currentId);
-  const prevIndex = (index - 1 + shaderPresets.length) % shaderPresets.length;
-  return shaderPresets[prevIndex];
 };

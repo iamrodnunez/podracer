@@ -53,6 +53,16 @@ export const downloadEpisode = async (
     throw new Error('Download already in progress');
   }
 
+  const audioUrl = episode.audioUrl;
+  try {
+    const parsed = new URL(audioUrl);
+    if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') {
+      throw new Error('Invalid audio URL scheme');
+    }
+  } catch {
+    throw new Error(`Invalid audio URL: ${audioUrl}`);
+  }
+
   await ensureDownloadDirectory();
   const downloadPath = getDownloadPath(episode);
 
@@ -62,7 +72,7 @@ export const downloadEpisode = async (
   }
 
   const downloadResumable = FileSystem.createDownloadResumable(
-    episode.audioUrl,
+    audioUrl,
     downloadPath,
     {
       headers: {

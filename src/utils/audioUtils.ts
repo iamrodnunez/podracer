@@ -36,47 +36,6 @@ export const SLEEP_TIMER_OPTIONS = [
 ];
 
 /**
- * Calculate frequency bins for visualization
- */
-export const calculateFrequencyBins = (
-  spectrum: Float32Array,
-  numBins: number
-): number[] => {
-  const bins: number[] = [];
-  const binSize = Math.floor(spectrum.length / numBins);
-
-  for (let i = 0; i < numBins; i++) {
-    let sum = 0;
-    for (let j = 0; j < binSize; j++) {
-      sum += spectrum[i * binSize + j] || 0;
-    }
-    bins.push(sum / binSize);
-  }
-
-  return bins;
-};
-
-/**
- * Normalize audio data to 0-1 range
- */
-export const normalizeAudioData = (data: Float32Array): Float32Array => {
-  const normalized = new Float32Array(data.length);
-  let max = 0;
-
-  for (let i = 0; i < data.length; i++) {
-    max = Math.max(max, Math.abs(data[i]));
-  }
-
-  if (max === 0) return normalized;
-
-  for (let i = 0; i < data.length; i++) {
-    normalized[i] = data[i] / max;
-  }
-
-  return normalized;
-};
-
-/**
  * Calculate bass, mid, and treble from spectrum
  */
 export const calculateBands = (
