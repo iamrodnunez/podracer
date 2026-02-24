@@ -4,7 +4,7 @@ import { View, StyleSheet, ActivityIndicator } from 'react-native';
 import { NavigationContainer, DarkTheme, useNavigation } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createStackNavigator } from '@react-navigation/stack';
-import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { Text } from 'react-native';
 
@@ -179,6 +179,7 @@ const TabNavigatorContent: React.FC = () => {
   const navigation = useNavigation<any>();
   const { currentEpisode } = usePlayerStore();
   const { podcasts } = usePodcastStore();
+  const insets = useSafeAreaInsets();
 
   const podcast = currentEpisode
     ? podcasts.find((p) => p.id === currentEpisode.podcastId)
@@ -202,8 +203,8 @@ const TabNavigatorContent: React.FC = () => {
             borderTopColor: '#374151',
             borderTopWidth: 1,
             paddingTop: 12,
-            paddingBottom: 8,
-            height: 64,
+            paddingBottom: 8 + insets.bottom,
+            height: 64 + insets.bottom,
           },
           tabBarShowLabel: false,
           headerStyle: {

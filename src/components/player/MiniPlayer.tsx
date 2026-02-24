@@ -6,6 +6,7 @@ import {
   StyleSheet,
   TouchableOpacity,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { usePlayerStore } from '../../store/usePlayerStore';
 import { ProgressBar } from '../common/ProgressBar';
 import * as audioService from '../../services/audioService';
@@ -20,6 +21,7 @@ export const MiniPlayer: React.FC<MiniPlayerProps> = ({
   artworkUrl,
 }) => {
   const { currentEpisode, isPlaying, currentTime, duration } = usePlayerStore();
+  const insets = useSafeAreaInsets();
 
   if (!currentEpisode) return null;
 
@@ -30,7 +32,7 @@ export const MiniPlayer: React.FC<MiniPlayerProps> = ({
   };
 
   return (
-    <View style={styles.wrapper}>
+    <View style={[styles.wrapper, { paddingBottom: insets.bottom }]}>
       <ProgressBar progress={progress} height={2} style={styles.progress} />
       <TouchableOpacity style={styles.container} onPress={onPress}>
         <View style={styles.artwork}>
